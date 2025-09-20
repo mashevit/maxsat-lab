@@ -1,0 +1,68 @@
+random_seed: 42
+
+ls:
+  name: "satlike"
+  flip_budget: 2000
+  restarts: 3
+  patience: 150
+  noise: 0.30       # p_noise
+  noise_adapt:
+    improve_delta: -0.05
+    stagnate_delta: 0.05
+    min: 0.05
+    max: 0.50
+  tabu_length: 12
+  dynamic_weights:
+    bump: 1          # +1 on chosen UNSAT clause
+    smooth_every: 500
+    rho: 0.5
+  size_rule:
+    k_child_min: 500
+    k_child_max: 15000
+    k_per_var: 5
+  hard_clause_policy: "forbid"  # forbid flips that break hard clauses
+
+ea:
+  enabled: false        # set true when memetic wrapper is implemented
+  pop_size: 60
+  tournament_k: 4
+  pmutate: 0.02
+  elitism: true
+  clause_aware_crossover: true
+  choose_focus_set_k: 3
+  ls_polish_flips: 700
+
+seeding:
+  total: 60
+  streams:
+    - name: "random_jw"
+      count: 20
+      jw_smoothing: 1.0
+      p_clip: [0.05, 0.95]
+    - name: "ls_polished"
+      count: 20
+      flips_min: 500
+      flips_max: 2000
+    - name: "llm_prior"
+      count: 20
+      beta_mix: 0.5
+      p_clip: [0.05, 0.95]
+
+llm:
+  provider: "ollama"        # or "openai"
+  model: "llama3.1:70b"     # placeholder; adjust to your local 20B model
+  per_run_usd_cap: 2.0
+  total_soft_cap_usd: 8.0
+  strict_json: true
+  cache_dir: "experiments/llm_cache"
+
+bench:
+  instances_dir: "data"
+  csv_out: "results/bench.csv"
+  plot_anytime: false
+  ab_harness:
+    enabled: false
+    instances: 15
+    per_run_seconds: 2
+    win_rate_threshold: 0.60
+    median_gain_threshold: 0.01
