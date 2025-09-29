@@ -1,111 +1,212 @@
 from __future__ import annotations
-import random
-from dataclasses import dataclass
-from typing import List, Tuple, Optional
-from .cnf import WCNF
+from typing import Dict, Any, List, Tuple
+import time, math, random
 
-@dataclass
-class WalkSATConfig:
-    max_flips: int = 2000
-    restarts: int = 3
-    patience: int = 150
-    noise: float = 0.30
-    tabu_length: int = 12
-    forbid_break_hard: bool = True
+from .state import SatState, ClauseInfo
 
-class WalkSAT:
+# Helper: pull clause lists & occurrence lists from your parser.
+# We assume your parser (src/sat/cnf.py) exposes at least:
+# - nvars
+# - one of:
+#   (a) hard_clauses: List[List[int]], soft_clauses: List[Tuple[int, List[int]]]
+#   (b) clauses: List[List[int]], weights: List[int], top: int (hard if weight >= top)
+# - pos_occ, neg_occ: List[List[int]] – occurrences for literals by variable (1..nvars)
+
+
+def _extract_clauses(cnf) -> Tuple[int, List[ClauseInfo], List[List[int]], List[List[int]]]:
+    n = getattr(cnf, "nvars", getattr(cnf, "nv", None))
+    if n is None:
+        raise ValueError("CNF parser must expose nvars (or nv)")
+
+    pos_occ = getattr(cnf, "pos_occ", None)
+    neg_occ = getattr(cnf, "neg_occ", None)
+    if pos_occ is None or neg_occ is None:
+        raise ValueError("CNF parser must expose pos_occ / neg_occ (occurrence lists)")
+
+    clauses: List[ClauseInfo] = []
+    # Style (a): separate hard/soft
+    if hasattr(cnf, "hard_clauses") and hasattr(cnf, "soft_clauses"):
+        for lits in cnf.hard_clauses:
+            clauses.append(ClauseInfo(lits=list(lits), base_w=0, is_hard=True))
+        for w, lits in cnf.soft_clauses:
+            clauses.append(ClauseInfo(lits=list(lits), base_w=int(w), is_hard=False))
+    # Style (b): unified with weights and top
+    elif hasattr(cnf, "clauses") and hasattr(cnf, "weights"):
+        top = getattr(cnf, "top", None)
+        if top is None:
+            # Assume all are soft with given weights; treat weight==0 as hard fallback
+            for w, lits in zip(cnf.weights, cnf.clauses):
+                is_hard = (w == 0)
+                bw = 0 if is_hard else int(w or 1)
+                clauses.append(ClauseInfo(lits=list(lits), base_w=bw, is_hard=is_hard))
+        else:
+            for w, lits in zip(cnf.weights, cnf.clauses):
+                is_hard = (w >= top)
+                bw = 0 if is_hard else int(w or 1)
+                clauses.append(ClauseInfo(lits=list(lits), base_w=bw, is_hard=is_hard))
+    else:
+        # Fallback: treat all as soft weight 1
+        for lits in getattr(cnf, "clauses", []):
+            clauses.append(ClauseInfo(lits=list(lits), base_w=1, is_hard=False))
+        if not clauses:
+            raise ValueError("CNF parser interface not recognized; expected hard/soft or clauses+weights.")
+
+    return n, clauses, pos_occ, neg_occ
+
+
+def _cfg(cfg: Dict[str, Any], key: str, default):
+    return cfg.get(key, default)
+
+
+def run_satlike(cnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
     """
-    Simplified WalkSAT/SATLike-style skeleton:
-    - Prefers not to break hard clauses.
-    - Chooses a random unsatisfied clause and flips a variable using
-      a noise / best-gain mixture (very simplified for wiring).
+    Production-grade SATLike-ish local search for (W)CNF with:
+      - O(occ(v)) incremental gains
+      - dynamic weights (bump chosen UNSAT; smooth every N flips with rho)
+      - tabu with aspiration
+      - noise adaptation
+      - hard-safe flips; restarts via size rule k = clamp(5*n, 500, 15000)
+    Returns detailed stats.
     """
-    def __init__(self, cnf: WCNF, cfg: WalkSATConfig, rng: Optional[random.Random] = None):
-        self.cnf = cnf
-        self.cfg = cfg
-        self.rng = rng or random.Random(42)
+    n, clauses, pos_occ, neg_occ = _extract_clauses(cnf)
+    rng = random.Random(rng_seed)
+    state = SatState(nvars=n, clauses=clauses, pos_occ=pos_occ, neg_occ=neg_occ, rng=rng)
 
-    def _rand_assign(self) -> List[int]:
-        # 1-indexed assignment of 0/1
-        return [0] + [self.rng.randint(0, 1) for _ in range(self.cnf.n_vars)]
+    # Pull knobs (with robust defaults)
+    max_flips        = int(_cfg(cfg, "max_flips", 1_000_000))
+    noise            = float(_cfg(cfg, "noise", 0.20))
+    noise_min        = float(_cfg(cfg, "noise_min", 0.05))
+    noise_max        = float(_cfg(cfg, "noise_max", 0.50))
+    adapt_delta      = float(_cfg(cfg, "noise_adapt_delta", 0.05))
+    adapt_every      = int(_cfg(cfg, "adapt_every", 2000))
+    tabu_len         = int(_cfg(cfg, "tabu_length", 12))
+    bump             = float(_cfg(cfg, "dyn_bump", 1.0))
+    smooth_every     = int(_cfg(cfg, "smooth_every", 5000))
+    rho              = float(_cfg(cfg, "rho", 0.5))  # 0<rho<1
+    restart_after    = int(_cfg(cfg, "restart_after", 20000))
+    # size rule: k = clamp(5*n, 500, 15000)
+    restart_k        = int(max(500, min(15000, 5 * n)))
+    hard_safe        = bool(_cfg(cfg, "hard_safe", True))
+    time_limit_s     = float(_cfg(cfg, "time_limit_s", 60.0))
 
-    def _clause_satisfied(self, cl_idx: int, assign01: List[int]) -> bool:
-        cl = self.cnf.clauses[cl_idx]
-        return any((lit > 0 and assign01[abs(lit)] == 1) or (lit < 0 and assign01[abs(lit)] == 0) for lit in cl.lits)
+    start_t = time.time()
+    last_improve_iter = 0
+    last_improve_soft = state.best_soft_obj
 
-    def _would_break_hard(self, var: int, assign01: List[int]) -> bool:
-        """Return True if flipping var would make any hard clause unsatisfied."""
-        new_val = 1 - assign01[var]
-        # Check only hard clauses touching var
-        # Clauses satisfied by other lits remain satisfied; we check conservatively by recomputing
-        touched = set(self.cnf.pos_adj[var] + self.cnf.neg_adj[var])
-        for cid in touched:
-            cl = self.cnf.clauses[cid]
-            if not cl.is_hard:
-                continue
-            # simulate satisfaction under flip
-            sat = False
-            for lit in cl.lits:
-                v = abs(lit)
-                val = assign01[v] if v != var else new_val
-                if (lit > 0 and val == 1) or (lit < 0 and val == 0):
-                    sat = True
+    def time_up() -> bool:
+        return (time.time() - start_t) >= time_limit_s
+
+    def pick_unsat_clause_index() -> int:
+        # Prefer hard UNSAT if present; else any unsat soft
+        hard_unsat = [i for i, c in enumerate(state.clauses) if c.is_hard and c.true_cnt == 0]
+        if hard_unsat:
+            return rng.choice(hard_unsat)
+        soft_unsat = state.unsat_soft_indices()
+        if soft_unsat:
+            return rng.choice(soft_unsat)
+        # Fully satisfied -> we can stop early
+        return -1
+
+    while state.flips < max_flips and not time_up():
+        target = pick_unsat_clause_index()
+        if target == -1:
+            # No unsatisfied clauses -> optimal (for given dyn weights) / hard feasible
+            state.snapshot_best_if_better()
+            break
+
+        # Dynamic weighting: bump chosen UNSAT soft clause
+        state.bump_clause(target, bump)
+
+        clause_vars = [abs(l) for l in state.clauses[target].lits]
+        cand_vars = clause_vars.copy()
+        rng.shuffle(cand_vars)
+
+        chosen_v = None
+        chosen_gain = float("-inf")
+
+        # Decide exploration vs exploitation
+        explore = (rng.random() < noise)
+        if explore:
+            # Random var from target clause, but respect hard-safety unless disabled
+            for v in cand_vars:
+                if not hard_safe or state.hard_safe(v):
+                    chosen_v = v
+                    chosen_gain, _ = state.flip_var_effect(v)
                     break
-            if not sat:
-                return True
-        return False
+        else:
+            # Greedy over target clause vars with tabu and aspiration
+            best_v = None
+            best_gain = float("-inf")
+            best_break = math.inf
+            aspirant_v = None
+            aspirant_gain = float("-inf")
+            for v in cand_vars:
+                gain, br = state.flip_var_effect(v)
+                if hard_safe and br > 0:
+                    continue
+                is_tabu = state.var_is_tabu(v)
+                if not is_tabu:
+                    if (gain > best_gain) or (gain == best_gain and br < best_break):
+                        best_gain, best_break = gain, br
+                        best_v = v
+                else:
+                    # Aspiration if move yields immediate improvement beyond current best soft
+                    # (and remains hard-safe)
+                    if gain + state._soft_objective() > state.best_soft_obj and gain > aspirant_gain:
+                        aspirant_gain = gain
+                        aspirant_v = v
+            if aspirant_v is not None:
+                chosen_v, chosen_gain = aspirant_v, aspirant_gain
+            else:
+                chosen_v, chosen_gain = best_v, best_gain
 
-    def _pick_var_to_flip(self, unsat_clause_idx: int, assign01: List[int]) -> Optional[int]:
-        cl = self.cnf.clauses[unsat_clause_idx]
-        candidates = [abs(l) for l in cl.lits] if cl.lits else []
-        self.rng.shuffle(candidates)
-        # With 'noise', just pick a random allowed variable
-        if self.rng.random() < self.cfg.noise:
-            for v in candidates:
-                if not self.cfg.forbid_break_hard or not self._would_break_hard(v, assign01):
-                    return v
-            return None
-        # Otherwise pick the first that doesn't break hard
-        best_v = None
-        for v in candidates:
-            if not self.cfg.forbid_break_hard or not self._would_break_hard(v, assign01):
-                best_v = v
-                break
-        return best_v
-
-    def run(self, max_flips: Optional[int] = None, restarts: Optional[int] = None) -> Tuple[List[int], int]:
-        max_flips = max_flips or self.cfg.max_flips
-        restarts = restarts or self.cfg.restarts
-
-        best_assign = None
-        best_score = -1
-
-        for _r in range(restarts):
-            assign01 = self._rand_assign()
-            flips = 0
-            while flips < max_flips:
-                # Evaluate and track best
-                sat_w, hard_v, soft_v = self.cnf.eval_assignment(assign01)
-                if hard_v == 0 and sat_w > best_score:
-                    best_assign = assign01.copy()
-                    best_score = sat_w
-                # Collect unsatisfied clauses (both hard and soft)
-                unsat = [i for i, cl in enumerate(self.cnf.clauses) if not self._clause_satisfied(i, assign01)]
-                if not unsat:
-                    # fully satisfied
-                    return assign01, sat_w
-                # Prefer soft clause to improve objective; fall back to any unsat
-                soft_unsat = [i for i in unsat if not self.cnf.clauses[i].is_hard]
-                target = self.rng.choice(soft_unsat if soft_unsat else unsat)
-                v = self._pick_var_to_flip(target, assign01)
-                if v is None:
-                    # no safe flip; random restart
+        if chosen_v is None:
+            # Fallback: try any variable in the instance (rare)
+            for v in rng.sample(range(1, n + 1), min(n, 32)):
+                gain, br = state.flip_var_effect(v)
+                if (not hard_safe or br == 0):
+                    chosen_v, chosen_gain = v, gain
                     break
-                assign01[v] = 1 - assign01[v]
-                flips += 1
-        if best_assign is None:
-            # just return last assignment
-            assign01 = self._rand_assign()
-            sat_w, _, _ = self.cnf.eval_assignment(assign01)
-            return assign01, sat_w
-        return best_assign, best_score
+            if chosen_v is None:
+                # Give up this iteration; consider restart
+                pass
+        else:
+            # Apply flip
+            state.apply_flip(chosen_v)
+            state.set_tabu(chosen_v, tabu_len)
+
+        # Periodic smoothing
+        if smooth_every > 0 and state.flips > 0 and (state.flips % smooth_every == 0):
+            state.smooth(rho)
+
+        # Track improvement and adapt noise
+        improved = state.snapshot_best_if_better()
+        if improved:
+            last_improve_iter = state.iter_idx
+            last_improve_soft = state.best_soft_obj
+            noise = max(noise_min, noise - adapt_delta)
+        elif state.iter_idx - last_improve_iter >= adapt_every:
+            noise = min(noise_max, noise + adapt_delta)
+            last_improve_iter = state.iter_idx  # avoid repeated bumps
+
+        # Restart on long stagnation or time pressure
+        if restart_after > 0 and state.iter_idx > 0 and (state.iter_idx % restart_after == 0):
+            state.restart_partial_from_best(restart_k)
+
+    elapsed = max(1e-9, time.time() - start_t)
+    hv = state._count_hard_violations()
+    soft = state._soft_objective()
+    # Prefer best stored soft if hard-feasible
+    if state.best_assign is not None and hv == 0:
+        soft = state.best_soft_obj
+        hv = 0
+
+    return {
+        "best_soft_weight": float(soft),
+        "hard_violations": int(hv),
+        "total_flips": int(state.flips),
+        "flips_per_sec": float(state.flips / elapsed),
+        "restarts": int(state.restarts),
+        "elapsed_sec": float(elapsed),
+        "final_noise": float(noise),
+    }
