@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Dict
 from ..sat.cnf import WCNF
 from ..sat.walksat import WalkSAT, WalkSATConfig
+from ..evo.memetic import run_memetic
 
 def load_config(path: str) -> Dict[str, Any]:
     with open(path, "r", encoding="utf-8") as f:
@@ -14,6 +15,7 @@ def main():
     ap = argparse.ArgumentParser(description="Run a minimal WalkSAT step (wiring check).")
     ap.add_argument("--cnf", required=True, help="Path to a .cnf or .wcnf instance")
     ap.add_argument("--config", default="configs/default.yaml", help="YAML config path")
+    ap.add_argument("--ea", action="store_true", help="Use memetic EA instead of LS")
     args = ap.parse_args()
 
     cfg = load_config(args.config)
@@ -33,6 +35,11 @@ def main():
 
     solver = WalkSAT(inst, ws_cfg)
     best_assign, best_score = solver.run()
+#    -    stats = walksat.run_satlike(inst, cfg, rng_seed=cfg.get("random_seed", 1))
+#+    if args.ea or cfg.get("ea", {}).get("enabled", False):
+#+        stats = run_memetic(inst, cfg, rng_seed=cfg.get("random_seed", 1))
+#+    else:
+#+        stats = walksat.run_satlike(inst, cfg, rng_seed=cfg.get("random_seed", 1))
     print(f"[OK] best_satisfied_weight={best_score} on n={inst.n_vars} vars, m={len(inst.clauses)} clauses.")
 
 if __name__ == "__main__":
