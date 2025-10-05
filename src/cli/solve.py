@@ -22,11 +22,13 @@ def main():
     ls_cfg = cfg.get("ls", {})
     ws_cfg = WalkSATConfig(
         max_flips=int(ls_cfg.get("flip_budget", 2000)),
+        time_limit_s=float(ls_cfg.get("time_limit_s", 60.0)),
         restarts=int(ls_cfg.get("restarts", 3)),
         patience=int(ls_cfg.get("patience", 150)),
         noise=float(ls_cfg.get("noise", 0.3)),
         tabu_length=int(ls_cfg.get("tabu_length", 12)),
-        forbid_break_hard=(ls_cfg.get("hard_clause_policy", "forbid") == "forbid"),
+        forbid_break_hard=(ls_cfg.get("hard_clause_policy", "forbid") == "forbid")
+        
     )
 
     solver = WalkSAT(inst, ws_cfg)

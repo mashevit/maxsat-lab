@@ -2,28 +2,44 @@ random_seed: 42
 
 ls:
   name: "satlike"
-  flip_budget: 300000
+
+  # --- Budgets ---
+  time_limit_s: 20        # wall-time cap per instance (seconds)
+  flip_budget: 300000     # maps to max_flips
   restarts: 3
-  patience: 150
-  noise: 0.10       # p_noise
+  patience: 150           # maps to adapt_every (stagnation window)
+
+  # --- Exploration (noise) ---
+  noise: 0.10             # initial p_noise
   noise_adapt:
     improve_delta: -0.05
     stagnate_delta: 0.05
     min: 0.05
     max: 0.25
+
+  # --- Tabu ---
   tabu_length: 12
+
+  # --- Dynamic clause weights (soft) ---
   dynamic_weights:
-    bump: 0.5          # +1 on chosen UNSAT clause
+    bump: 0.5            # bump on chosen UNSAT soft clause
     smooth_every: 3000
     rho: 0.5
+
+  # --- Hard-first extras ---
+  hard_repair_budget: 12000   # extra flips before main loop to reduce hard violations
+
+  # --- Restart sizing rule ---
   size_rule:
     k_child_min: 500
     k_child_max: 15000
     k_per_var: 5
-  hard_clause_policy: "forbid"  # forbid flips that break hard clauses
+
+  # --- Hard clauses policy ---
+  hard_clause_policy: "forbid"  # when hv==0, forbid breaking hard clauses
 
 ea:
-  enabled: false        # set true when memetic wrapper is implemented
+  enabled: false
   pop_size: 60
   tournament_k: 4
   pmutate: 0.02
@@ -50,7 +66,7 @@ seeding:
 
 llm:
   provider: "ollama"        # or "openai"
-  model: "llama3.1:70b"     # placeholder; adjust to your local 20B model
+  model: "llama3.1:70b"     # placeholder; set to your local 20B tag
   per_run_usd_cap: 2.0
   total_soft_cap_usd: 8.0
   strict_json: true
@@ -66,3 +82,11 @@ bench:
     per_run_seconds: 2
     win_rate_threshold: 0.60
     median_gain_threshold: 0.01
+
+# ---- Flat aliases (optional) ----
+# If your CLI maps ls: → flat, these ensure older wiring still gets the right keys.
+time_limit_s: 20
+max_flips: 300000
+tabu_length: 12
+noise: 0.10
+hard_repair_budget: 12000

@@ -3,19 +3,10 @@ from typing import Dict, Any, List, Tuple
 import time, math, random
 
 from .state import SatState, ClauseInfo
-
 import random
 from dataclasses import dataclass
 from typing import List, Tuple, Optional
 from .cnf import WCNF
-# Helper: pull clause lists & occurrence lists from your parser.
-# We assume your parser (src/sat/cnf.py) exposes at least:
-# - nvars
-# - one of:
-#   (a) hard_clauses: List[List[int]], soft_clauses: List[Tuple[int, List[int]]]
-#   (b) clauses: List[List[int]], weights: List[int], top: int (hard if weight >= top)
-# - pos_occ, neg_occ: List[List[int]] – occurrences for literals by variable (1..nvars)
-
 
 @dataclass
 class WalkSATConfig:
@@ -25,6 +16,7 @@ class WalkSATConfig:
     noise: float = 0.30
     tabu_length: int = 12
     forbid_break_hard: bool = True
+    time_limit_s: float = 60.0
 
 class WalkSAT:
     """
@@ -36,7 +28,31 @@ class WalkSAT:
     def __init__(self, cnf: WCNF, cfg: WalkSATConfig, rng: Optional[random.Random] = None):
         self.cnf = cnf
         self.cfg = cfg
+
         self.rng = rng or random.Random(42)
+
+
+    from typing import Iterable
+
+    def _enforce_hard_units(state: SatState) -> None:
+        """
+        Make the current assignment satisfy all HARD unit clauses (length 1).
+        Recomputes clause true-counts afterward.
+        """
+        changed = False
+        for c in state.clauses:
+            if c.is_hard and len(c.lits) == 1:
+                lit = c.lits[0]
+                v = abs(lit)
+                want_true = (lit > 0)
+                if state.assign[v] != want_true:
+                    state.assign[v] = want_true
+                    changed = True
+        if changed:
+                # recompute all true_cnts once
+            for c in state.clauses:
+                c.true_cnt = state._compute_clause_true_count(c.lits)
+
 
     def _rand_assign(self) -> List[int]:
         # 1-indexed assignment of 0/1
@@ -87,7 +103,9 @@ class WalkSAT:
         return best_v
 
     def run(self, max_flips: Optional[int] = None, restarts: Optional[int] = None) -> Tuple[List[int], int]:
+        #print(f'maxflips0 {max_flips}',file=sys.stderr, flush=True)
         max_flips = max_flips or self.cfg.max_flips
+        #print(f'maxflips {max_flips}',file=sys.stderr, flush=True)
         restarts = restarts or self.cfg.restarts
 
         best_assign = None
@@ -125,30 +143,30 @@ class WalkSAT:
 
 
 
+
 def _extract_clauses(cnf) -> Tuple[int, List[ClauseInfo], List[List[int]], List[List[int]]]:
-# Support: nvars / nv / n_vars
+    # Support: nvars / nv / n_vars
     n = getattr(cnf, "nvars", getattr(cnf, "nv", getattr(cnf, "n_vars", None)))
     if n is None:
-        raise ValueError("CNF parser must expose nvars (or nv)")
+        raise ValueError("CNF parser must expose nvars (or nv / n_vars)")
 
     # Support: pos_occ/neg_occ OR pos_adj/neg_adj
     pos_occ = getattr(cnf, "pos_occ", getattr(cnf, "pos_adj", None))
     neg_occ = getattr(cnf, "neg_occ", getattr(cnf, "neg_adj", None))
     if pos_occ is None or neg_occ is None:
-        raise ValueError("CNF parser must expose pos_occ / neg_occ (occurrence lists)")
+        raise ValueError("CNF parser must expose pos_occ/neg_occ or pos_adj/neg_adj")
 
     clauses: List[ClauseInfo] = []
-    # Style (a): separate hard/soft
+    # (a) Parser exposes separate hard/soft lists
     if hasattr(cnf, "hard_clauses") and hasattr(cnf, "soft_clauses"):
         for lits in cnf.hard_clauses:
             clauses.append(ClauseInfo(lits=list(lits), base_w=0, is_hard=True))
         for w, lits in cnf.soft_clauses:
             clauses.append(ClauseInfo(lits=list(lits), base_w=int(w), is_hard=False))
-    # Style (b): unified with weights and top
+    # (b) Unified arrays with weights/top
     elif hasattr(cnf, "clauses") and hasattr(cnf, "weights"):
         top = getattr(cnf, "top", None)
         if top is None:
-            # Assume all are soft with given weights; treat weight==0 as hard fallback
             for w, lits in zip(cnf.weights, cnf.clauses):
                 is_hard = (w == 0)
                 bw = 0 if is_hard else int(w or 1)
@@ -157,10 +175,10 @@ def _extract_clauses(cnf) -> Tuple[int, List[ClauseInfo], List[List[int]], List[
             for w, lits in zip(cnf.weights, cnf.clauses):
                 is_hard = (w >= top)
                 bw = 0 if is_hard else int(w or 1)
- 
-    # Style (c): Your WCNF class: clauses are objects with (weight, lits, is_hard)
+                clauses.append(ClauseInfo(lits=list(lits), base_w=bw, is_hard=is_hard))
+    # (c) Your WCNF class: list of Clause(weight, lits, is_hard)
     elif hasattr(cnf, "clauses") and len(getattr(cnf, "clauses")) > 0 and \
-        hasattr(cnf.clauses[0], "lits") and hasattr(cnf.clauses[0], "weight") and hasattr(cnf.clauses[0], "is_hard"):
+         hasattr(cnf.clauses[0], "lits") and hasattr(cnf.clauses[0], "weight") and hasattr(cnf.clauses[0], "is_hard"):
         for cl in cnf.clauses:
             is_hard = bool(cl.is_hard)
             bw = 0 if is_hard else int(cl.weight or 1)
@@ -170,7 +188,7 @@ def _extract_clauses(cnf) -> Tuple[int, List[ClauseInfo], List[List[int]], List[
         for lits in getattr(cnf, "clauses", []):
             clauses.append(ClauseInfo(lits=list(lits), base_w=1, is_hard=False))
         if not clauses:
-            raise ValueError("CNF parser interface not recognized; expected hard/soft or clauses+weights.")
+            raise ValueError("CNF parser interface not recognized.")
 
     return n, clauses, pos_occ, neg_occ
 
@@ -179,21 +197,45 @@ def _cfg(cfg: Dict[str, Any], key: str, default):
     return cfg.get(key, default)
 
 
+
+def _freeze_hard_units(state: SatState) -> None:
+    """
+    Identify hard unit clauses, set their variables to satisfy the unit,
+    recompute true-counts once, and mark those vars as frozen.
+    """
+    changed = False
+    frozen = set()
+    for c in state.clauses:
+        if c.is_hard and len(c.lits) == 1:
+            lit = c.lits[0]
+            v = abs(lit)
+            want_true = (lit > 0)
+            frozen.add(v)
+            if state.assign[v] != want_true:
+                state.assign[v] = want_true
+                changed = True
+    state.frozen_vars |= frozen
+    if changed:
+        for c in state.clauses:
+            c.true_cnt = state._compute_clause_true_count(c.lits)
+
 def run_satlike(cnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
     """
-    Production-grade SATLike-ish local search for (W)CNF with:
+    SATLike-ish local search with:
       - O(occ(v)) incremental gains
-      - dynamic weights (bump chosen UNSAT; smooth every N flips with rho)
+      - dynamic soft weights (bump + smoothing)
       - tabu with aspiration
-      - noise adaptation
-      - hard-safe flips; restarts via size rule k = clamp(5*n, 500, 15000)
-    Returns detailed stats.
+      - adaptive noise
+      - hard-first repair (pre-phase + in-loop), optional
+      - restarts by size rule
     """
     n, clauses, pos_occ, neg_occ = _extract_clauses(cnf)
     rng = random.Random(rng_seed)
     state = SatState(nvars=n, clauses=clauses, pos_occ=pos_occ, neg_occ=neg_occ, rng=rng)
-
-    # Pull knobs (with robust defaults)
+    # Freeze variables from hard unit clauses (e.g., 10 1 0, 10 2 0)
+    _freeze_hard_units(state)   
+    _enforce_hard_units(state)
+    # Knobs
     max_flips        = int(_cfg(cfg, "max_flips", 1_000_000))
     noise            = float(_cfg(cfg, "noise", 0.20))
     noise_min        = float(_cfg(cfg, "noise_min", 0.05))
@@ -205,122 +247,165 @@ def run_satlike(cnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
     smooth_every     = int(_cfg(cfg, "smooth_every", 5000))
     rho              = float(_cfg(cfg, "rho", 0.5))  # 0<rho<1
     restart_after    = int(_cfg(cfg, "restart_after", 20000))
-    # size rule: k = clamp(5*n, 500, 15000)
     restart_k        = int(max(500, min(15000, 5 * n)))
     hard_safe        = bool(_cfg(cfg, "hard_safe", True))
     time_limit_s     = float(_cfg(cfg, "time_limit_s", 60.0))
+    hard_repair_budget = int(_cfg(cfg, "hard_repair_budget", 8000))
 
     start_t = time.time()
     last_improve_iter = 0
-    last_improve_soft = state.best_soft_obj
 
     def time_up() -> bool:
         return (time.time() - start_t) >= time_limit_s
 
     def pick_unsat_clause_index() -> int:
-        # Prefer hard UNSAT if present; else any unsat soft
-        hard_unsat = [i for i, c in enumerate(state.clauses) if c.is_hard and c.true_cnt == 0]
+        hard_unsat = state.unsat_hard_ids()
         if hard_unsat:
             return rng.choice(hard_unsat)
         soft_unsat = state.unsat_soft_indices()
         if soft_unsat:
             return rng.choice(soft_unsat)
-        # Fully satisfied -> we can stop early
         return -1
 
+    # Global hard-repair pre-phase
+    if state._count_hard_violations() > 0 and hard_repair_budget > 0:
+        for _ in range(hard_repair_budget):
+            if time_up():
+                break
+            hard_unsat = state.unsat_hard_ids()
+            if not hard_unsat:
+                break
+            cand = state.vars_adjacent_to(hard_unsat)
+            best_v = None
+            best_dh = 0
+            best_gain = float("-inf")
+            for v in cand:
+                dh = state.flip_var_hard_delta(v)
+                if dh < best_dh or (dh == best_dh and dh < 0):
+                    g, _ = state.flip_var_effect(v)
+                    if dh < 0 and g > best_gain:
+                        best_gain = g
+                        best_dh = dh
+                        best_v = v
+            if best_v is None:
+                break
+            state.apply_flip(best_v)
+            if state._count_hard_violations() == 0:
+                state.snapshot_best_if_better()
+                break
+
+    # Main loop
     while state.flips < max_flips and not time_up():
         target = pick_unsat_clause_index()
         if target == -1:
-            # No unsatisfied clauses -> optimal (for given dyn weights) / hard feasible
             state.snapshot_best_if_better()
             break
 
-        # Dynamic weighting: bump chosen UNSAT soft clause
-        state.bump_clause(target, bump)
+        if not state.clauses[target].is_hard:
+            state.bump_clause(target, bump)
 
-        clause_vars = [abs(l) for l in state.clauses[target].lits]
-        cand_vars = clause_vars.copy()
+        clause = state.clauses[target]
+        hv_now = state._count_hard_violations()
+
+        if hv_now > 0:
+            cand_vars = list(state.vars_adjacent_to(state.unsat_hard_ids()))
+        else:
+            cand_vars = [abs(l) for l in clause.lits]
+        # Never consider frozen vars (hard units)
+        cand_vars = [v for v in cand_vars if v not in state.frozen_vars]
         rng.shuffle(cand_vars)
 
         chosen_v = None
         chosen_gain = float("-inf")
 
-        # Decide exploration vs exploitation
         explore = (rng.random() < noise)
+
         if explore:
-            # Random var from target clause, but respect hard-safety unless disabled
-            for v in cand_vars:
-                if not hard_safe or state.hard_safe(v):
-                    chosen_v = v
-                    chosen_gain, _ = state.flip_var_effect(v)
-                    break
+            if hv_now > 0:
+                for v in cand_vars:
+                    if state.flip_var_hard_delta(v) < 0:
+                        chosen_v = v
+                        chosen_gain, _ = state.flip_var_effect(v)
+                        break
+            else:
+                for v in cand_vars:
+                    if (not hard_safe) or state.hard_safe(v):
+                        chosen_v = v
+                        chosen_gain, _ = state.flip_var_effect(v)
+                        break
         else:
-            # Greedy over target clause vars with tabu and aspiration
             best_v = None
             best_gain = float("-inf")
             best_break = math.inf
+            best_dh = math.inf
             aspirant_v = None
             aspirant_gain = float("-inf")
+            aspirant_dh = math.inf
+
             for v in cand_vars:
                 gain, br = state.flip_var_effect(v)
-                if hard_safe and br > 0:
-                    continue
+                dh = state.flip_var_hard_delta(v)
                 is_tabu = state.var_is_tabu(v)
-                if not is_tabu:
-                    if (gain > best_gain) or (gain == best_gain and br < best_break):
-                        best_gain, best_break = gain, br
-                        best_v = v
-                else:
-                    # Aspiration if move yields immediate improvement beyond current best soft
-                    # (and remains hard-safe)
-                    if gain + state._soft_objective() > state.best_soft_obj and gain > aspirant_gain:
-                        aspirant_gain = gain
-                        aspirant_v = v
-            if aspirant_v is not None:
-                chosen_v, chosen_gain = aspirant_v, aspirant_gain
-            else:
-                chosen_v, chosen_gain = best_v, best_gain
 
-        if chosen_v is None:
-            # Fallback: try any variable in the instance (rare)
-            for v in rng.sample(range(1, n + 1), min(n, 32)):
-                gain, br = state.flip_var_effect(v)
-                if (not hard_safe or br == 0):
-                    chosen_v, chosen_gain = v, gain
-                    break
-            if chosen_v is None:
-                # Give up this iteration; consider restart
-                pass
-        else:
-            # Apply flip
+                if hv_now > 0:
+                    if dh >= 0:
+                        continue
+                    if not is_tabu:
+                        if (dh < best_dh) or (dh == best_dh and (gain > best_gain or (gain == best_gain and br < best_break))):
+                            best_dh, best_gain, best_break = dh, gain, br
+                            best_v = v
+                    else:
+                        if (dh < aspirant_dh) or (dh == aspirant_dh and gain > aspirant_gain):
+                            aspirant_dh, aspirant_gain, aspirant_v = dh, gain, v
+                else:
+                    if hard_safe and br > 0:
+                        continue
+                    if not is_tabu:
+                        if (gain > best_gain) or (gain == best_gain and br < best_break):
+                            best_gain, best_break = gain, br
+                            best_v = v
+                    else:
+                        if gain + state._soft_objective() > state.best_soft_obj and gain > aspirant_gain:
+                            aspirant_gain = gain
+                            aspirant_v = v
+
+            chosen_v, chosen_gain = (aspirant_v, aspirant_gain) if aspirant_v is not None else (best_v, best_gain)
+
+        if chosen_v is not None:
             state.apply_flip(chosen_v)
             state.set_tabu(chosen_v, tabu_len)
 
-        # Periodic smoothing
         if smooth_every > 0 and state.flips > 0 and (state.flips % smooth_every == 0):
             state.smooth(rho)
 
-        # Track improvement and adapt noise
-        improved = state.snapshot_best_if_better()
+        improved = state._count_hard_violations() == 0 and state._soft_objective() > state.best_soft_obj
         if improved:
             last_improve_iter = state.iter_idx
-            last_improve_soft = state.best_soft_obj
             noise = max(noise_min, noise - adapt_delta)
+            state.snapshot_best_if_better()
         elif state.iter_idx - last_improve_iter >= adapt_every:
             noise = min(noise_max, noise + adapt_delta)
-            last_improve_iter = state.iter_idx  # avoid repeated bumps
+            last_improve_iter = state.iter_idx
 
-        # Restart on long stagnation or time pressure
         if restart_after > 0 and state.iter_idx > 0 and (state.iter_idx % restart_after == 0):
             state.restart_partial_from_best(restart_k)
 
     elapsed = max(1e-9, time.time() - start_t)
     hv = state._count_hard_violations()
     soft = state._soft_objective()
-    # Prefer best stored soft if hard-feasible
     if state.best_assign is not None and hv == 0:
         soft = state.best_soft_obj
         hv = 0
+
+    # Debug dump of unsatisfied hard clauses (first few)
+    if hv > 0:
+        uns = state.unsat_hard_ids()
+        try:
+            print(f"[DEBUG] hard violations: {hv}; unsatisfied hard clause ids: {uns[:10]}", flush=True)
+            for cid in uns[:10]:
+                print(f"[DEBUG] clause[{cid}] lits={state.clauses[cid].lits}", flush=True)
+        except Exception:
+            pass
 
     return {
         "best_soft_weight": float(soft),

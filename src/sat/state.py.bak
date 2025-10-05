@@ -38,7 +38,6 @@ class SatState:
     # tabu tenure storage: iteration index when var becomes free
     tabu_until: List[int] = field(default_factory=list)
     iter_idx: int = 0
-    frozen_vars: set = field(default_factory=set)
 
     def __post_init__(self):
         if not self.assign:
@@ -90,9 +89,12 @@ class SatState:
         for ci in self.pos_occ[v]:
             c = self.clauses[ci]
             was_sat = c.true_cnt > 0
-            if self.assign[v]:  # v currently True; positive lit contributes 1
+            # flipping v from val->~val
+            if self.assign[v]:  # v currently True; positive lit contributes 1 to true_cnt
+                # becomes false: true_cnt decreases
                 t_after = c.true_cnt - 1
             else:
+                # was False, becomes True: true_cnt increases
                 t_after = c.true_cnt + 1
             if c.is_hard:
                 if was_sat and t_after == 0:
@@ -106,7 +108,7 @@ class SatState:
         for ci in self.neg_occ[v]:
             c = self.clauses[ci]
             was_sat = c.true_cnt > 0
-            if self.assign[v]:
+            if self.assign[v]:  # v True makes (-v) false; flipping makes it true
                 t_after = c.true_cnt + 1
             else:
                 t_after = c.true_cnt - 1
@@ -122,8 +124,6 @@ class SatState:
 
     def apply_flip(self, v: int) -> None:
         """Apply flip of variable v and update true-counts incrementally. O(occ(v))."""
-        if v in self.frozen_vars:
-            return  # ignore attempts to flip frozen vars
         self.assign[v] = (not self.assign[v])
         # Update positive occurrences
         for ci in self.pos_occ[v]:
@@ -149,7 +149,7 @@ class SatState:
     def flip_var_hard_delta(self, v: int) -> int:
         """
         Net change in #hard violations if we flip v:
-        delta_hard = broken_hard - made_hard  (negative is good)
+        delta_hard = broken_hard - made_hard  (negative is good!)
         """
         broken = 0
         made = 0
@@ -177,18 +177,6 @@ class SatState:
                 made += 1
         return broken - made
 
-    def unsat_soft_indices(self) -> List[int]:
-        return [i for i, c in enumerate(self.clauses) if (not c.is_hard) and c.true_cnt == 0]
-
-    def unsat_hard_ids(self) -> List[int]:
-        return [i for i, c in enumerate(self.clauses) if c.is_hard and c.true_cnt == 0]
-
-    def vars_adjacent_to(self, clause_ids: List[int]) -> set[int]:
-        adj: set[int] = set()
-        for ci in clause_ids:
-            for lit in self.clauses[ci].lits:
-                adj.add(abs(lit))
-        return adj
     def snapshot_best_if_better(self) -> bool:
         soft = self._soft_objective()
         hv = self._count_hard_violations()
@@ -226,13 +214,6 @@ class SatState:
                 c.true_cnt = self._compute_clause_true_count(c.lits)
         vars_list = list(range(1, self.nvars + 1))
         self.rng.shuffle(vars_list)
-
-        flips_done = 0
-        for v in vars_list:
-            if v in self.frozen_vars:
-                continue
+        for v in vars_list[:k]:
             self.apply_flip(v)
-            flips_done += 1
-            if flips_done >= k:
-                break
         self.restarts += 1

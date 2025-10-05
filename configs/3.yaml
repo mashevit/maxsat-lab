@@ -1,0 +1,83 @@
+random_seed: 42
+
+ls:
+  name: "satlike"
+  # Budgets
+  time_limit_s: 180
+  flip_budget: 5000000
+  restart_after: 20000
+           # hard wall-time cap per instance (seconds)
+        # secondary ceiling (maps to max_flips)
+  restarts: 60             # total partial restarts allowed overall
+  patience: 2000           # stagnation window before noise nudge (maps to adapt_every)
+
+  # Exploration (noise)
+  noise: 0.15
+  noise_adapt:
+    improve_delta: -0.05   # decrease noise on improvement
+    stagnate_delta: 0.05   # increase noise on stagnation
+    min: 0.05
+    max: 0.40
+
+  # Tabu
+  tabu_length: 12
+
+  # Dynamic clause weights (soft)
+  dynamic_weights:
+    bump: 0.5              # bump on chosen UNSAT soft clause
+    smooth_every: 3000     # smooth every N flips
+    rho: 0.5               # dyn = base + rho*(dyn-base)
+
+  # Restart size rule: k = clamp(k_per_var * n, k_child_min, k_child_max)
+  size_rule:
+    k_child_min: 500
+    k_child_max: 15000
+    k_per_var: 5
+
+  # Hard clauses
+  hard_clause_policy: "forbid"   # forbid flips that break any hard clause
+
+ea:
+  enabled: false
+  pop_size: 60
+  tournament_k: 4
+  pmutate: 0.02
+  elitism: true
+  clause_aware_crossover: true
+  choose_focus_set_k: 3
+  ls_polish_flips: 700
+
+seeding:
+  total: 60
+  streams:
+    - name: "random_jw"
+      count: 20
+      jw_smoothing: 1.0
+      p_clip: [0.05, 0.95]
+    - name: "ls_polished"
+      count: 20
+      flips_min: 500
+      flips_max: 2000
+    - name: "llm_prior"
+      count: 20
+      beta_mix: 0.5
+      p_clip: [0.05, 0.95]
+
+llm:
+  provider: "ollama"           # or "openai"
+  model: "your-20b-model-tag"  # set to your local 20B tag
+  per_run_usd_cap: 2.0
+  total_soft_cap_usd: 8.0
+  strict_json: true
+  cache_dir: "experiments/llm_cache"
+
+bench:
+  instances_dir: "data/toy"
+  csv_out: "experiments/toy_results.csv"
+  plot_anytime: false
+  ab_harness:
+    enabled: false
+    instances: 15
+    per_run_seconds: 10
+    win_rate_threshold: 0.60
+    median_gain_threshold: 0.01
