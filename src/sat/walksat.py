@@ -126,12 +126,14 @@ class WalkSAT:
 
 
 def _extract_clauses(cnf) -> Tuple[int, List[ClauseInfo], List[List[int]], List[List[int]]]:
-    n = getattr(cnf, "nvars", getattr(cnf, "nv", None))
+# Support: nvars / nv / n_vars
+    n = getattr(cnf, "nvars", getattr(cnf, "nv", getattr(cnf, "n_vars", None)))
     if n is None:
         raise ValueError("CNF parser must expose nvars (or nv)")
 
-    pos_occ = getattr(cnf, "pos_occ", None)
-    neg_occ = getattr(cnf, "neg_occ", None)
+    # Support: pos_occ/neg_occ OR pos_adj/neg_adj
+    pos_occ = getattr(cnf, "pos_occ", getattr(cnf, "pos_adj", None))
+    neg_occ = getattr(cnf, "neg_occ", getattr(cnf, "neg_adj", None))
     if pos_occ is None or neg_occ is None:
         raise ValueError("CNF parser must expose pos_occ / neg_occ (occurrence lists)")
 
@@ -155,7 +157,14 @@ def _extract_clauses(cnf) -> Tuple[int, List[ClauseInfo], List[List[int]], List[
             for w, lits in zip(cnf.weights, cnf.clauses):
                 is_hard = (w >= top)
                 bw = 0 if is_hard else int(w or 1)
-                clauses.append(ClauseInfo(lits=list(lits), base_w=bw, is_hard=is_hard))
+ 
+    # Style (c): Your WCNF class: clauses are objects with (weight, lits, is_hard)
+    elif hasattr(cnf, "clauses") and len(getattr(cnf, "clauses")) > 0 and \
+        hasattr(cnf.clauses[0], "lits") and hasattr(cnf.clauses[0], "weight") and hasattr(cnf.clauses[0], "is_hard"):
+        for cl in cnf.clauses:
+            is_hard = bool(cl.is_hard)
+            bw = 0 if is_hard else int(cl.weight or 1)
+            clauses.append(ClauseInfo(lits=list(cl.lits), base_w=bw, is_hard=is_hard))
     else:
         # Fallback: treat all as soft weight 1
         for lits in getattr(cnf, "clauses", []):

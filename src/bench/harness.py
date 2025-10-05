@@ -17,7 +17,8 @@ def solve_folder(folder: str, cfg: Dict[str, Any], seed: int = 1, time_limit_s: 
         if not (name.endswith(".wcnf") or name.endswith(".cnf")):
             continue
         path = os.path.join(folder, name)
-        ins = cnf_mod.parse(path) if hasattr(cnf_mod, "parse") else cnf_mod.CNF(path)  # be flexible
+        # Your cnf module exposes WCNF with a static parser:
+        ins = cnf_mod.WCNF.parse_dimacs(path)
         local_cfg = dict(cfg)
         local_cfg["time_limit_s"] = local_cfg.get("time_limit_s", time_limit_s)
         t0 = time.time()
