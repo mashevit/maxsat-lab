@@ -103,9 +103,9 @@ class WalkSAT:
         return best_v
 
     def run(self, max_flips: Optional[int] = None, restarts: Optional[int] = None) -> Tuple[List[int], int]:
-        #print(f'maxflips0 {max_flips}',file=sys.stderr, flush=True)
+
         max_flips = max_flips or self.cfg.max_flips
-        #print(f'maxflips {max_flips}',file=sys.stderr, flush=True)
+
         restarts = restarts or self.cfg.restarts
 
         best_assign = None
