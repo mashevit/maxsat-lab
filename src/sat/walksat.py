@@ -219,6 +219,110 @@ def _freeze_hard_units(state: SatState) -> None:
         for c in state.clauses:
             c.true_cnt = state._compute_clause_true_count(c.lits)
 
+
+
+
+from typing import Dict, List, Optional
+from .state import SatState, ClauseInfo
+
+def _derive_hard_fixed_literals(clauses: List[ClauseInfo], nvars: int) -> Optional[Dict[int, bool]]:
+    """
+    Hard-only unit propagation on a *temporary* copy of the hard core.
+    Returns a dict {v: True/False} of forced assignments. If the hard core
+    is contradictory, returns None (UNSAT hard core).
+    """
+    # Work on a lightweight copy of hard clauses only
+    hard = [list(c.lits) for c in clauses if c.is_hard]
+    if not hard:
+        return {}
+
+    # Occurrence map: literal -> list of clause indices
+    pos_occ: List[List[int]] = [[] for _ in range(nvars + 1)]
+    neg_occ: List[List[int]] = [[] for _ in range(nvars + 1)]
+    for ci, lits in enumerate(hard):
+        for lit in lits:
+            v = abs(lit)
+            (pos_occ if lit > 0 else neg_occ)[v].append(ci)
+
+    assigned: Dict[int, bool] = {}
+    in_q: List[int] = []
+
+    # Initialize queue with existing unit clauses
+    for ci, lits in enumerate(hard):
+        if len(lits) == 1:
+            in_q.append(ci)
+
+    def assign(var: int, val: bool) -> bool:
+        """Assign var=val; simplify hard clauses. Return False on conflict."""
+        if var in assigned:
+            return assigned[var] == val
+        assigned[var] = val
+
+        # Clauses satisfied by this literal: remove them
+        sat_occ = pos_occ[var] if val else neg_occ[var]
+        for ci in list(sat_occ):
+            hard[ci] = []  # mark as satisfied (removed)
+
+        # Clauses containing the negated literal: remove that literal
+        unsat_occ = neg_occ[var] if val else pos_occ[var]
+        for ci in list(unsat_occ):
+            if not hard[ci]:
+                continue  # already satisfied/removed
+            # remove the negated literal from clause ci
+            new_lits = [L for L in hard[ci] if abs(L) != var or (L > 0) == val]
+            # (keep only literals not equal to the FALSE literal)
+            # Check conflict
+            if len(new_lits) == 0:
+                return False  # empty hard clause -> UNSAT hard core
+            if len(new_lits) == 1 and len(hard[ci]) != 1:
+                in_q.append(ci)  # became unit -> enqueue
+            hard[ci] = new_lits
+        return True
+
+    # Process initial unit clauses
+    while in_q:
+        ci = in_q.pop()
+        lits = hard[ci]
+        if not lits:
+            continue  # clause already satisfied and removed
+        if len(lits) == 1:
+            lit = lits[0]
+            v = abs(lit)
+            val = (lit > 0)
+            if not assign(v, val):
+                return None  # contradiction
+
+    # Pure-literal elimination on the hard core (optional but cheap)
+    changed = True
+    while changed:
+        changed = False
+        for v in range(1, nvars + 1):
+            if v in assigned:
+                continue
+            # check if var appears only with one polarity in remaining hard clauses
+            pos = any((ci < len(hard) and hard[ci] and any(L == v for L in hard[ci])) for ci in pos_occ[v])
+            neg = any((ci < len(hard) and hard[ci] and any(L == -v for L in hard[ci])) for ci in neg_occ[v])
+            if pos and not neg:
+                if not assign(v, True): return None
+                changed = True
+            elif neg and not pos:
+                if not assign(v, False): return None
+                changed = True
+        # process any new units created by pure-literal assignments
+        while in_q:
+            ci = in_q.pop()
+            lits = hard[ci]
+            if not lits:
+                continue
+            if len(lits) == 1:
+                lit = lits[0]
+                v = abs(lit)
+                val = (lit > 0)
+                if not assign(v, val):
+                    return None
+
+    return assigned
+
 def run_satlike(cnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
     """
     SATLike-ish local search with:
@@ -233,8 +337,32 @@ def run_satlike(cnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
     rng = random.Random(rng_seed)
     state = SatState(nvars=n, clauses=clauses, pos_occ=pos_occ, neg_occ=neg_occ, rng=rng)
     # Freeze variables from hard unit clauses (e.g., 10 1 0, 10 2 0)
-    _freeze_hard_units(state)   
-    _enforce_hard_units(state)
+    #_freeze_hard_units(state) 
+    # NEW: derive forced literals from the hard core (general, not just units)
+    hard_facts = _derive_hard_fixed_literals(state.clauses, state.nvars)  
+    if hard_facts is None:
+        # Hard core contradictory; return immediately with hv>0
+        return {
+            "best_soft_weight": 0.0,
+            "hard_violations": 1,  # signal UNSAT hard core
+            "total_flips": 0,
+            "flips_per_sec": 0.0,
+            "restarts": 0,
+            "elapsed_sec": 0.0,
+            "final_noise": float(cfg.get("noise", 0.2)),
+        }
+    if hard_facts:
+        changed = False
+        for v, val in hard_facts.items():
+            if state.assign[v] != val:
+                state.assign[v] = val
+                changed = True
+            state.frozen_vars.add(v)  # freeze all derived hard facts
+        if changed:
+            # recompute true counts once
+            for c in state.clauses:
+                c.true_cnt = state._compute_clause_true_count(c.lits)
+    #_enforce_hard_units(state)
     # Knobs
     max_flips        = int(_cfg(cfg, "max_flips", 1_000_000))
     noise            = float(_cfg(cfg, "noise", 0.20))

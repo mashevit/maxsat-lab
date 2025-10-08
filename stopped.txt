@@ -6,3 +6,11 @@ unzip ~/tmp/maxsat_patch_20251005_054710.zip -d ~/tmp/maxsat_patch1
 what the following results mean: 
 instance,seed,elapsed_sec,best_soft_weight,hard_violations,total_flips,flips_per_sec,restarts,final_noise,config_hash,wall_sec
 mini.wcnf,1,24.0513756275177,7722.749763136507,2,1000003,41577.788126841064,50,0.5,f24fb00776,24.051563262939453
+
+
+walksat._pick_var_to_flip
+
+walksat.run_satlike
+line 159     clauses: List[ClauseInfo] = [] walksat
+
+def _freeze_hard_units(state: SatState) -> None:  line 201 walksat
