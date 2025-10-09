@@ -42,10 +42,10 @@ venv.bak/
 htmlcov/
 
 # Project data & results
-data/*
-!data/toy/**
-experiments/
-results/
+#data/*
+#!data/toy/**
+#experiments/
+#results/
 
 # OS files
 .DS_Store
