@@ -18,4 +18,7 @@ def _freeze_hard_units(state: SatState) -> None:  line 201 walksat
 line 354 walksat    if hard_facts:
         changed = False
         walksat                 c.true_cnt = state._compute_clause_true_count(c.lits),     
+line 427 walksat         target = pick_unsat_clause_index()
 
+line 432 walksat                if not state.clauses[target].is_hard:
+            state.bump_clause(target, bump)
