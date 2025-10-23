@@ -179,10 +179,12 @@ def _extract_clauses(cnf) -> Tuple[int, List[ClauseInfo], List[List[int]], List[
     # (c) Your WCNF class: list of Clause(weight, lits, is_hard)
     elif hasattr(cnf, "clauses") and len(getattr(cnf, "clauses")) > 0 and \
          hasattr(cnf.clauses[0], "lits") and hasattr(cnf.clauses[0], "weight") and hasattr(cnf.clauses[0], "is_hard"):
+        #print("in c")
         for cl in cnf.clauses:
             is_hard = bool(cl.is_hard)
             bw = 0 if is_hard else int(cl.weight or 1)
             clauses.append(ClauseInfo(lits=list(cl.lits), base_w=bw, is_hard=is_hard))
+            #print(f"bw = {bw}")
     else:
         # Fallback: treat all as soft weight 1
         for lits in getattr(cnf, "clauses", []):

@@ -11,7 +11,7 @@ Usage (inside your repo, after merging files):
     python -m src.cli.solve --cnf data/toy/mini.wcnf --config configs/default.yaml
 
 Batch:
-    python -m src.cli.solve_batch --folder data/toy --config configs/default.yaml --seed 1 --out experiments/toy_results1.csv
+    python -m src.cli.solve_batch --folder data/toy --config configs/default.yaml --seed 1 --out experiments/toy_results_tmp.csv
 
 Knobs you may want:
     time_limit_s: 20

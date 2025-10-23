@@ -22,3 +22,10 @@ line 427 walksat         target = pick_unsat_clause_index()
 
 line 432 walksat                if not state.clauses[target].is_hard:
             state.bump_clause(target, bump)
+
+
+walksat line 453
+        if explore:
+            if hv_now > 0:
+
+walksat line 456. state line 149            flip_var_hard_delta
