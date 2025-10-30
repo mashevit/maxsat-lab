@@ -29,3 +29,5 @@ walksat line 453
             if hv_now > 0:
 
 walksat line 456. state line 149            flip_var_hard_delta
+
+walksat line 458                        chosen_gain, _ = state.flip_var_effect(v)
