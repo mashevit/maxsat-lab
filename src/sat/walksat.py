@@ -463,6 +463,39 @@ def run_satlike(cnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
                         chosen_v = v
                         chosen_gain, _ = state.flip_var_effect(v)
                         break
+# When we are NOT exploring (i.e., explore == False), we EXPLOIT:
+# pick the best candidate from cand_vars according to a consistent criterion.
+#
+# Selection criterion:
+#   1) Prefer the move with the smallest delta_hard (Δhard violations after the flip).
+#      - Negative delta_hard is best (reduces hard violations).
+#      - Then zero (does not worsen hard violations).
+#      - Only if none exist, allow positive delta_hard and pick the smallest.
+#   2) Tie-break on maximum gain (soft objective improvement using dyn_w).
+#
+# Rationale:
+#   - Hard constraints dominate: first minimize harm to hard clauses (ideally improve).
+#   - Among equally "hard-safe" moves, take the largest soft improvement.
+#
+# Notes:
+#   - If `hard_safe` is required, we first filter out candidates with delta_hard > 0.
+#     If this yields no candidates, we fall back to the full set and still apply the
+#     (delta_hard, gain) ordering so we can keep making progress.
+#   - If multiple candidates tie on both criteria, optionally keep all best and pick
+#     uniformly at random among them to avoid deterministic cycles.
+#   - If `flip_var_effect(v)` returns (gain, delta_hard), use it directly; otherwise,
+#     compute gain via flip_var_effect and delta_hard via flip_var_hard_delta for consistency.
+
+
+
+# Principle of "explore":
+# Exploration injects randomness to sample moves that are NOT currently rated best.
+# This helps escape local optima, diversify search trajectories, and discover high-value
+# regions the greedy/exploit rule might never reach. In contrast, exploitation (this else)
+# greedily applies our current best heuristic judgment to improve the objective now.
+       
+        
+        
         else:
             best_v = None
             best_gain = float("-inf")

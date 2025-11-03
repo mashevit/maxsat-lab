@@ -31,3 +31,10 @@ walksat line 453
 walksat line 456. state line 149            flip_var_hard_delta
 
 walksat line 458                        chosen_gain, _ = state.flip_var_effect(v)
+
+
+walksat line 499 else:
+    best_v = None
+            best_gain = float("-inf")
+            best_break = math.inf
+
