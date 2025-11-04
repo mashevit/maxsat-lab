@@ -38,7 +38,7 @@ class SatState:
     # tabu tenure storage: iteration index when var becomes free
     tabu_until: List[int] = field(default_factory=list)
     iter_idx: int = 0
-    frozen_vars: set = field(default_factory=set)
+    #frozen_vars: set = field(default_factory=set)
 
     def __post_init__(self):
         if not self.assign:
@@ -79,6 +79,62 @@ class SatState:
     def set_tabu(self, v: int, tenure: int) -> None:
         self.tabu_until[v] = self.iter_idx + tenure
 
+
+
+
+
+
+
+    def flip_var_effect(self, v: int) -> Tuple[float, int]:
+        """
+        Compute:
+        - gain: delta of the soft objective using dyn_w
+        - delta_hard: (#broken_hard_after - #broken_hard_before)
+
+        Positive delta_hard => you break additional hard clause(s).
+        Negative delta_hard => you fix some broken hard clause(s).
+        Zero => no net change.
+        Runs in O(occ(v)).
+        """
+        gain = 0.0
+        delta_hard = 0
+
+        # Clauses where v appears positively
+        for ci in self.pos_occ[v]:
+            c = self.clauses[ci]
+            was_sat = c.true_cnt > 0
+            t_after = c.true_cnt - 1 if self.assign[v] else c.true_cnt + 1
+
+            if c.is_hard:
+                if was_sat and t_after == 0:
+                    delta_hard += 1          # you break a hard clause
+                elif (not was_sat) and t_after > 0:
+                    delta_hard -= 1          # you fix a broken hard clause
+            else:
+                if (not was_sat) and t_after > 0:
+                    gain += c.dyn_w
+                elif was_sat and t_after == 0:
+                    gain -= c.dyn_w
+
+        # Clauses where v appears negated
+        for ci in self.neg_occ[v]:
+            c = self.clauses[ci]
+            was_sat = c.true_cnt > 0
+            t_after = c.true_cnt + 1 if self.assign[v] else c.true_cnt - 1
+
+            if c.is_hard:
+                if was_sat and t_after == 0:
+                    delta_hard += 1
+                elif (not was_sat) and t_after > 0:
+                    delta_hard -= 1
+            else:
+                if (not was_sat) and t_after > 0:
+                    gain += c.dyn_w
+                elif was_sat and t_after == 0:
+                    gain -= c.dyn_w
+
+        return gain, delta_hard
+    '''
     def flip_var_effect(self, v: int) -> Tuple[float, int]:
         """
         Compute gain (delta soft objective using dyn_w) and number of broken hard clauses
@@ -119,11 +175,12 @@ class SatState:
                 elif was_sat and t_after == 0:
                     gain -= c.dyn_w
         return gain, break_hard
+        '''
 
     def apply_flip(self, v: int) -> None:
         """Apply flip of variable v and update true-counts incrementally. O(occ(v))."""
-        if v in self.frozen_vars:
-            return  # ignore attempts to flip frozen vars
+        #if v in self.frozen_vars:
+         #   return  # ignore attempts to flip frozen vars
         self.assign[v] = (not self.assign[v])
         # Update positive occurrences
         for ci in self.pos_occ[v]:
@@ -144,7 +201,7 @@ class SatState:
 
     def hard_safe(self, v: int) -> bool:
         _, br = self.flip_var_effect(v)
-        return br == 0
+        return br <= 0
 
     def flip_var_hard_delta(self, v: int) -> int:
         """
@@ -229,8 +286,8 @@ class SatState:
 
         flips_done = 0
         for v in vars_list:
-            if v in self.frozen_vars:
-                continue
+            #if v in self.frozen_vars:
+                #continue
             self.apply_flip(v)
             flips_done += 1
             if flips_done >= k:

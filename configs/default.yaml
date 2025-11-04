@@ -2,7 +2,7 @@ random_seed: 42
 
 ls:
   name: "satlike"
-  flip_budget: 300000
+  flip_budget: 500000
   restarts: 3
   patience: 150
   noise: 0.10       # p_noise
@@ -20,7 +20,7 @@ ls:
     k_child_min: 500
     k_child_max: 15000
     k_per_var: 5
-  hard_clause_policy: "forbid"  # forbid flips that break hard clauses
+  hard_clause_policy: "forbid"  # 'forbid' forbid flips that break hard clauses
 
 ea:
   enabled: false        # set true when memetic wrapper is implemented

@@ -1,6 +1,10 @@
 from __future__ import annotations
 import argparse, yaml, os
-from ..bench.harness import solve_folder, write_csv
+from ..bench.harness import solve_folder, write_csv, normalize_cfg
+
+
+
+
 
 
 def main():
@@ -15,6 +19,9 @@ def main():
     with open(args.config, "r") as f:
         cfg = yaml.safe_load(f) or {}
 
+    # We'll compute restart_k per instance (need n_vars), so do a first-pass normalize now:
+    base_cfg = normalize_cfg(cfg)  # n_vars=None here
+    '''
     # If using nested ls:, map a few common keys
     ls = cfg.get("ls", {})
     if "flip_budget" in ls and "max_flips" not in cfg:
@@ -31,7 +38,9 @@ def main():
     if args.time_limit_s is not None:
         cfg["time_limit_s"] = float(args.time_limit_s)
 
-    rows = solve_folder(args.folder, cfg, seed=args.seed)
+    '''
+   # print(f'got {ls.get("hard_safe", True)}')
+    rows = solve_folder(args.folder, cfg, seed=base_cfg.get("random_seed", args.seed))
     os.makedirs(os.path.dirname(args.out) or ".", exist_ok=True)
     write_csv(rows, args.out)
     print(f"OK solve_batch: wrote {args.out} ({len(rows)} rows)")

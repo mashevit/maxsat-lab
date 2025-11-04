@@ -335,12 +335,14 @@ def run_satlike(cnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
       - hard-first repair (pre-phase + in-loop), optional
       - restarts by size rule
     """
+    applied = 0
     n, clauses, pos_occ, neg_occ = _extract_clauses(cnf)
     rng = random.Random(rng_seed)
     state = SatState(nvars=n, clauses=clauses, pos_occ=pos_occ, neg_occ=neg_occ, rng=rng)
     # Freeze variables from hard unit clauses (e.g., 10 1 0, 10 2 0)
     #_freeze_hard_units(state) 
     # NEW: derive forced literals from the hard core (general, not just units)
+    '''
     hard_facts = _derive_hard_fixed_literals(state.clauses, state.nvars)  
     if hard_facts is None:
         # Hard core contradictory; return immediately with hv>0
@@ -364,9 +366,12 @@ def run_satlike(cnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
             # recompute true counts once
             for c in state.clauses:
                 c.true_cnt = state._compute_clause_true_count(c.lits)
+
+
+    '''            
     #_enforce_hard_units(state)
     # Knobs
-    max_flips        = int(_cfg(cfg, "max_flips", 1_000_000))
+    max_flips        = int(_cfg(cfg, "flip_budget", 1_000_000))
     noise            = float(_cfg(cfg, "noise", 0.20))
     noise_min        = float(_cfg(cfg, "noise_min", 0.05))
     noise_max        = float(_cfg(cfg, "noise_max", 0.50))
@@ -381,7 +386,7 @@ def run_satlike(cnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
     hard_safe        = bool(_cfg(cfg, "hard_safe", True))
     time_limit_s     = float(_cfg(cfg, "time_limit_s", 60.0))
     hard_repair_budget = int(_cfg(cfg, "hard_repair_budget", 8000))
-
+    print(f'hardsafe = {hard_safe}')
     start_t = time.time()
     last_improve_iter = 0
 
@@ -396,7 +401,7 @@ def run_satlike(cnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
         if soft_unsat:
             return rng.choice(soft_unsat)
         return -1
-
+    '''
     # Global hard-repair pre-phase
     if state._count_hard_violations() > 0 and hard_repair_budget > 0:
         for _ in range(hard_repair_budget):
@@ -423,7 +428,7 @@ def run_satlike(cnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
             if state._count_hard_violations() == 0:
                 state.snapshot_best_if_better()
                 break
-
+    '''
     # Main loop
     while state.flips < max_flips and not time_up():
         target = pick_unsat_clause_index()
@@ -442,7 +447,7 @@ def run_satlike(cnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
         else:
             cand_vars = [abs(l) for l in clause.lits]
         # Never consider frozen vars (hard units)
-        cand_vars = [v for v in cand_vars if v not in state.frozen_vars]
+        #cand_vars = [v for v in cand_vars]  # if v not in state.frozen_varscand_vars = [v for v in cand_vars '''if v not in state.frozen_vars''']
         rng.shuffle(cand_vars)
 
         chosen_v = None
@@ -511,17 +516,39 @@ def run_satlike(cnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
                 is_tabu = state.var_is_tabu(v)
 
                 if hv_now > 0:
-                    if dh >= 0:
+                    if dh > 0:
                         continue
                     if not is_tabu:
                         if (dh < best_dh) or (dh == best_dh and (gain > best_gain or (gain == best_gain and br < best_break))):
                             best_dh, best_gain, best_break = dh, gain, br
                             best_v = v
                     else:
-                        if (dh < aspirant_dh) or (dh == aspirant_dh and gain > aspirant_gain):
-                            aspirant_dh, aspirant_gain, aspirant_v = dh, gain, v
+                        # assume: gain, dh computed; is_tabu is True here
+                        cur_soft = state._soft_objective()
+                        #hv_now   = state.hard_violations()
+                        hv_after = hv_now + dh
+
+                        # Hard-safety guards
+                        if hard_safe and hv_after > hv_now:
+                            pass  # skip this candidate
+                        elif hv_now > 0 and dh >= 0:
+                            pass  # in repair mode we only accept strict repairs
+                        else:
+                            # Aspiration: accept tabu move if it yields a new global best soft value
+                            new_soft = cur_soft + gain
+                            # Keep the best aspirant: prefer stronger hard repair, tie-break by larger soft gain
+                          #  if (dh < aspirant_dh) or (dh == aspirant_dh and gain > aspirant_gain):
+                           #     aspirant_dh   = dh
+                            #    aspirant_gain = gain
+                             #   aspirant_v    = v
+
+
+
+                            if (dh < aspirant_dh) or (dh == aspirant_dh and gain > aspirant_gain):
+                                  aspirant_dh, aspirant_gain, aspirant_v = dh, gain, v
+                    #print('000')
                 else:
-                    if hard_safe and br > 0:
+                    if hard_safe or br > 0:
                         continue
                     if not is_tabu:
                         if (gain > best_gain) or (gain == best_gain and br < best_break):
@@ -531,10 +558,15 @@ def run_satlike(cnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
                         if gain + state._soft_objective() > state.best_soft_obj and gain > aspirant_gain:
                             aspirant_gain = gain
                             aspirant_v = v
-
+                    print('here')
+            if aspirant_v is not None:
+                print(f'aspirant_v={aspirant_v}')
             chosen_v, chosen_gain = (aspirant_v, aspirant_gain) if aspirant_v is not None else (best_v, best_gain)
 
         if chosen_v is not None:
+            #if not applied:
+                #print('applied flip')
+            applied += 1
             state.apply_flip(chosen_v)
             state.set_tabu(chosen_v, tabu_len)
 
@@ -552,7 +584,7 @@ def run_satlike(cnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
 
         if restart_after > 0 and state.iter_idx > 0 and (state.iter_idx % restart_after == 0):
             state.restart_partial_from_best(restart_k)
-
+    print("applied =", applied)
     elapsed = max(1e-9, time.time() - start_t)
     hv = state._count_hard_violations()
     soft = state._soft_objective()

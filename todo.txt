@@ -1,1 +1,11 @@
 ask how to use var chosen_gain
+
+check - 
+    def smooth(self, rho: float) -> None:
+        """Move dyn_w toward base_w: dyn = base + rho*(dyn-base), 0<rho<1."""
+        for c in self.clauses:
+            if not c.is_hard and c.dyn_w > c.base_w:
+                c.dyn_w = c.base_w + rho * (c.dyn_w - c.base_w)
+
+    def restart_partial_from_best(self, k: int) -> None:
+        """Restart from best assignment (if any), then flip k random vars."""
