@@ -13,6 +13,13 @@ Usage (inside your repo, after merging files):
 Batch:
     python -m src.cli.solve_batch --folder data/toy --config configs/default.yaml --seed 1 --out experiments/toy_results_tmp.csv
 
+
+
+
+
+
+OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 python -m src.cli.solve_batch --folder data/toy --config configs/default.yaml --seed 1 --out experiments/toy_results_tmp.csv
+
 Knobs you may want:
     time_limit_s: 20
     max_flips: 500000

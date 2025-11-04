@@ -335,7 +335,11 @@ def run_satlike(cnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
       - hard-first repair (pre-phase + in-loop), optional
       - restarts by size rule
     """
+    flag = False
     applied = 0
+    applied1 = 0
+    applied3 = 0
+    emptyset = set() 
     n, clauses, pos_occ, neg_occ = _extract_clauses(cnf)
     rng = random.Random(rng_seed)
     state = SatState(nvars=n, clauses=clauses, pos_occ=pos_occ, neg_occ=neg_occ, rng=rng)
@@ -389,7 +393,7 @@ def run_satlike(cnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
     print(f'hardsafe = {hard_safe}')
     start_t = time.time()
     last_improve_iter = 0
-
+    print('noise start =', noise)
     def time_up() -> bool:
         return (time.time() - start_t) >= time_limit_s
 
@@ -430,6 +434,7 @@ def run_satlike(cnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
                 break
     '''
     # Main loop
+    print('max_flips =', max_flips)
     while state.flips < max_flips and not time_up():
         target = pick_unsat_clause_index()
         if target == -1:
@@ -456,6 +461,8 @@ def run_satlike(cnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
         explore = (rng.random() < noise)
 
         if explore:
+            
+            applied1 += 1
             if hv_now > 0:
                 for v in cand_vars:
                     if state.flip_var_hard_delta(v) < 0:
@@ -464,7 +471,8 @@ def run_satlike(cnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
                         break
             else:
                 for v in cand_vars:
-                    if (not hard_safe) or state.hard_safe(v):
+                    if (not hard_safe) or state.flip_var_hard_delta(v) == 0:
+                    #state.hard_safe(v):
                         chosen_v = v
                         chosen_gain, _ = state.flip_var_effect(v)
                         break
@@ -502,6 +510,10 @@ def run_satlike(cnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
         
         
         else:
+            
+
+            applied3 += 1
+
             best_v = None
             best_gain = float("-inf")
             best_break = math.inf
@@ -548,7 +560,7 @@ def run_satlike(cnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
                                   aspirant_dh, aspirant_gain, aspirant_v = dh, gain, v
                     #print('000')
                 else:
-                    if hard_safe or br > 0:
+                    if hard_safe and dh != 0:
                         continue
                     if not is_tabu:
                         if (gain > best_gain) or (gain == best_gain and br < best_break):
@@ -558,15 +570,28 @@ def run_satlike(cnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
                         if gain + state._soft_objective() > state.best_soft_obj and gain > aspirant_gain:
                             aspirant_gain = gain
                             aspirant_v = v
-                    print('here')
-            if aspirant_v is not None:
-                print(f'aspirant_v={aspirant_v}')
+                    #print('here')
+            #if aspirant_v is not None:
+                #print(f'aspirant_v={aspirant_v}')
             chosen_v, chosen_gain = (aspirant_v, aspirant_gain) if aspirant_v is not None else (best_v, best_gain)
+            flag = flag or chosen_v is not None
 
+
+        if chosen_v is not None:
+            dh = state.flip_var_hard_delta(chosen_v)
+            if hv_now == 0 and dh != 0:
+                chosen_v = None  # never break feasibility
+            elif hv_now > 0 and dh > 0:
+                chosen_v = None  # don't worsen hard in repair mode
         if chosen_v is not None:
             #if not applied:
                 #print('applied flip')
             applied += 1
+            dh = state.flip_var_hard_delta(chosen_v)
+            hv_now = state._count_hard_violations()
+            if (hv_now == 0 and dh != 0) or (hv_now > 0 and dh >= 0):
+                raise AssertionError("Hard-safety breach")
+            emptyset.add(chosen_v)
             state.apply_flip(chosen_v)
             state.set_tabu(chosen_v, tabu_len)
 
@@ -583,8 +608,12 @@ def run_satlike(cnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
             last_improve_iter = state.iter_idx
 
         if restart_after > 0 and state.iter_idx > 0 and (state.iter_idx % restart_after == 0):
-            state.restart_partial_from_best(restart_k)
+            pass#state.restart_partial_from_best(restart_k)
     print("applied =", applied)
+    print("applied1 =", applied1)
+    print("applied3 =", applied3)
+    print("flag =", flag)
+    print("emptyset  =", emptyset)
     elapsed = max(1e-9, time.time() - start_t)
     hv = state._count_hard_violations()
     soft = state._soft_objective()

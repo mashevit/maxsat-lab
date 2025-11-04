@@ -199,10 +199,22 @@ class SatState:
         self.flips += 1
         self.iter_idx += 1
 
+    
+    def hard_safe(self,v):
+        dH = self.flip_var_hard_delta(v)
+        if self._count_hard_violations() == 0:
+            return dH == 0        # stay feasible
+        else:
+            return dH <= 0        # don't get worse
+    
+    '''
     def hard_safe(self, v: int) -> bool:
         _, br = self.flip_var_effect(v)
         return br <= 0
+    '''
 
+
+    '''
     def flip_var_hard_delta(self, v: int) -> int:
         """
         Net change in #hard violations if we flip v:
@@ -232,6 +244,53 @@ class SatState:
                 broken += 1
             if (not was_sat) and t_after > 0:
                 made += 1
+        return broken - made
+    '''
+
+    def flip_var_hard_delta(self, v: int) -> int:
+        """
+        Net change in #hard violations if we flip v:
+        delta_hard = broken_hard - made_hard  (negative is good)
+        Robust to (a) duplicates and (b) v and ¬v in the same clause.
+        """
+        broken = 0
+        made = 0
+
+        # Clauses touched by v (either polarity), deduped
+        touched = set(self.pos_occ[v])
+        touched.update(self.neg_occ[v])
+
+        # Count multiplicity of v in each clause by polarity (handles duplicates)
+        # (If your data structure guarantees uniqueness, you can skip counting.)
+        from collections import Counter, defaultdict
+        pos_count = Counter(self.pos_occ[v])
+        neg_count = Counter(self.neg_occ[v])
+
+        v_is_true = self.assign[v]
+
+        for ci in touched:
+            c = self.clauses[ci]
+            if not c.is_hard:
+                continue
+
+            was_sat = c.true_cnt > 0
+
+            # Contribution change of v to c.true_cnt after flip:
+            # If v is currently True, pos literals lose, neg literals gain; and vice versa.
+            pos_mult = pos_count.get(ci, 0)
+            neg_mult = neg_count.get(ci, 0)
+            if v_is_true:
+                delta_true_lits = -pos_mult + neg_mult
+            else:
+                delta_true_lits = +pos_mult - neg_mult
+
+            t_after = c.true_cnt + delta_true_lits
+
+            if was_sat and t_after == 0:
+                broken += 1
+            elif (not was_sat) and t_after > 0:
+                made += 1
+
         return broken - made
 
     def unsat_soft_indices(self) -> List[int]:
