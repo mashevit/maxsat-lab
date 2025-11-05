@@ -1,0 +1,2 @@
+instance,seed,elapsed_sec,best_soft_weight,hard_violations,total_flips,flips_per_sec,restarts,final_noise,config_hash,wall_sec
+mini.wcnf,42,3.5397515296936035,661.5226835786005,0,500000,141252.852299291,0,0.25,39bafd2b1d,3.5399398803710938

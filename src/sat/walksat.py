@@ -405,119 +405,59 @@ def run_satlike(cnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
         if soft_unsat:
             return rng.choice(soft_unsat)
         return -1
-    '''
-    # Global hard-repair pre-phase
-    if state._count_hard_violations() > 0 and hard_repair_budget > 0:
-        for _ in range(hard_repair_budget):
-            if time_up():
-                break
-            hard_unsat = state.unsat_hard_ids()
-            if not hard_unsat:
-                break
-            cand = state.vars_adjacent_to(hard_unsat)
-            best_v = None
-            best_dh = 0
-            best_gain = float("-inf")
-            for v in cand:
-                dh = state.flip_var_hard_delta(v)
-                if dh < best_dh or (dh == best_dh and dh < 0):
-                    g, _ = state.flip_var_effect(v)
-                    if dh < 0 and g > best_gain:
-                        best_gain = g
-                        best_dh = dh
-                        best_v = v
-            if best_v is None:
-                break
-            state.apply_flip(best_v)
-            if state._count_hard_violations() == 0:
-                state.snapshot_best_if_better()
-                break
-    '''
-    # Main loop
-    print('max_flips =', max_flips)
     while state.flips < max_flips and not time_up():
         target = pick_unsat_clause_index()
         if target == -1:
             state.snapshot_best_if_better()
             break
 
+        # Dynamic weighting bump for soft-unsat only
         if not state.clauses[target].is_hard:
             state.bump_clause(target, bump)
 
         clause = state.clauses[target]
-        hv_now = state._count_hard_violations()
-
-        if hv_now > 0:
-            cand_vars = list(state.vars_adjacent_to(state.unsat_hard_ids()))
-        else:
-            cand_vars = [abs(l) for l in clause.lits]
-        # Never consider frozen vars (hard units)
-        #cand_vars = [v for v in cand_vars]  # if v not in state.frozen_varscand_vars = [v for v in cand_vars '''if v not in state.frozen_vars''']
+        cand_vars = [abs(l) for l in clause.lits]
         rng.shuffle(cand_vars)
 
         chosen_v = None
         chosen_gain = float("-inf")
 
+        hv_now = state._count_hard_violations()
         explore = (rng.random() < noise)
 
         if explore:
-            
-            applied1 += 1
-            if hv_now > 0:
+            # If a hard clause is unsat, try to satisfy it directly
+            if clause.is_hard and clause.true_cnt == 0:
+                for lit in clause.lits:
+                    v = abs(lit)
+                    # literal that would make this clause true
+                    makes_clause_true = (lit > 0 and not state.assign[v]) or (lit < 0 and state.assign[v])
+                    if makes_clause_true:
+                        # allow if (a) hard_safe is off, or (b) net hard improves
+                        if (not hard_safe) or (state.flip_var_hard_delta(v) < 0) or (hv_now == 0 and state.hard_safe(v)):
+                            chosen_v = v
+                            chosen_gain, _ = state.flip_var_effect(v)
+                            break
+            # fallback
+            if chosen_v is None:
                 for v in cand_vars:
-                    if state.flip_var_hard_delta(v) < 0:
-                        chosen_v = v
-                        chosen_gain, _ = state.flip_var_effect(v)
-                        break
-            else:
-                for v in cand_vars:
-                    if (not hard_safe) or state.flip_var_hard_delta(v) == 0:
-                    #state.hard_safe(v):
-                        chosen_v = v
-                        chosen_gain, _ = state.flip_var_effect(v)
-                        break
-# When we are NOT exploring (i.e., explore == False), we EXPLOIT:
-# pick the best candidate from cand_vars according to a consistent criterion.
-#
-# Selection criterion:
-#   1) Prefer the move with the smallest delta_hard (Δhard violations after the flip).
-#      - Negative delta_hard is best (reduces hard violations).
-#      - Then zero (does not worsen hard violations).
-#      - Only if none exist, allow positive delta_hard and pick the smallest.
-#   2) Tie-break on maximum gain (soft objective improvement using dyn_w).
-#
-# Rationale:
-#   - Hard constraints dominate: first minimize harm to hard clauses (ideally improve).
-#   - Among equally "hard-safe" moves, take the largest soft improvement.
-#
-# Notes:
-#   - If `hard_safe` is required, we first filter out candidates with delta_hard > 0.
-#     If this yields no candidates, we fall back to the full set and still apply the
-#     (delta_hard, gain) ordering so we can keep making progress.
-#   - If multiple candidates tie on both criteria, optionally keep all best and pick
-#     uniformly at random among them to avoid deterministic cycles.
-#   - If `flip_var_effect(v)` returns (gain, delta_hard), use it directly; otherwise,
-#     compute gain via flip_var_effect and delta_hard via flip_var_hard_delta for consistency.
-
-
-
-# Principle of "explore":
-# Exploration injects randomness to sample moves that are NOT currently rated best.
-# This helps escape local optima, diversify search trajectories, and discover high-value
-# regions the greedy/exploit rule might never reach. In contrast, exploitation (this else)
-# greedily applies our current best heuristic judgment to improve the objective now.
-       
-        
-        
+                    if hv_now > 0:
+                        # allow any flip that reduces hard violations
+                        if state.flip_var_hard_delta(v) < 0:
+                            chosen_v = v
+                            chosen_gain, _ = state.flip_var_effect(v)
+                            break
+                    else:
+                        if (not hard_safe) or state.hard_safe(v):
+                            chosen_v = v
+                            chosen_gain, _ = state.flip_var_effect(v)
+                            break
         else:
-            
-
-            applied3 += 1
-
+            # Greedy selection
             best_v = None
             best_gain = float("-inf")
             best_break = math.inf
-            best_dh = math.inf
+            best_dh = math.inf  # smaller (more negative) is better
             aspirant_v = None
             aspirant_gain = float("-inf")
             aspirant_dh = math.inf
@@ -528,92 +468,59 @@ def run_satlike(cnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
                 is_tabu = state.var_is_tabu(v)
 
                 if hv_now > 0:
-                    if dh > 0:
+                    # PRIORITY: reduce hard violations; allow temporary hard breaks if dh<0
+                    if dh >= 0:
                         continue
                     if not is_tabu:
+                        # pick most negative dh; tie-break by gain, then by fewer hard breaks
                         if (dh < best_dh) or (dh == best_dh and (gain > best_gain or (gain == best_gain and br < best_break))):
                             best_dh, best_gain, best_break = dh, gain, br
                             best_v = v
                     else:
-                        # assume: gain, dh computed; is_tabu is True here
-                        cur_soft = state._soft_objective()
-                        #hv_now   = state.hard_violations()
-                        hv_after = hv_now + dh
-
-                        # Hard-safety guards
-                        if hard_safe and hv_after > hv_now:
-                            pass  # skip this candidate
-                        elif hv_now > 0 and dh >= 0:
-                            pass  # in repair mode we only accept strict repairs
-                        else:
-                            # Aspiration: accept tabu move if it yields a new global best soft value
-                            new_soft = cur_soft + gain
-                            # Keep the best aspirant: prefer stronger hard repair, tie-break by larger soft gain
-                          #  if (dh < aspirant_dh) or (dh == aspirant_dh and gain > aspirant_gain):
-                           #     aspirant_dh   = dh
-                            #    aspirant_gain = gain
-                             #   aspirant_v    = v
-
-
-
-                            if (dh < aspirant_dh) or (dh == aspirant_dh and gain > aspirant_gain):
-                                  aspirant_dh, aspirant_gain, aspirant_v = dh, gain, v
-                    #print('000')
+                        # aspiration: any tabu move that reduces hard is allowed
+                        if (dh < aspirant_dh) or (dh == aspirant_dh and gain > aspirant_gain):
+                            aspirant_dh, aspirant_gain, aspirant_v = dh, gain, v
                 else:
-                    if hard_safe and dh != 0:
+                    # No hard violations: respect hard_safe as usual
+                    if hard_safe and br > 0:
                         continue
                     if not is_tabu:
                         if (gain > best_gain) or (gain == best_gain and br < best_break):
                             best_gain, best_break = gain, br
                             best_v = v
                     else:
+                        # classic aspiration on soft objective
                         if gain + state._soft_objective() > state.best_soft_obj and gain > aspirant_gain:
                             aspirant_gain = gain
                             aspirant_v = v
-                    #print('here')
-            #if aspirant_v is not None:
-                #print(f'aspirant_v={aspirant_v}')
+
             chosen_v, chosen_gain = (aspirant_v, aspirant_gain) if aspirant_v is not None else (best_v, best_gain)
-            flag = flag or chosen_v is not None
 
-
-        if chosen_v is not None:
-            dh = state.flip_var_hard_delta(chosen_v)
-            if hv_now == 0 and dh != 0:
-                chosen_v = None  # never break feasibility
-            elif hv_now > 0 and dh > 0:
-                chosen_v = None  # don't worsen hard in repair mode
-        if chosen_v is not None:
-            #if not applied:
-                #print('applied flip')
-            applied += 1
-            dh = state.flip_var_hard_delta(chosen_v)
-            hv_now = state._count_hard_violations()
-            if (hv_now == 0 and dh != 0) or (hv_now > 0 and dh >= 0):
-                raise AssertionError("Hard-safety breach")
-            emptyset.add(chosen_v)
+        if chosen_v is None:
+            # powerless this iteration—consider restart later
+            pass
+        else:
             state.apply_flip(chosen_v)
             state.set_tabu(chosen_v, tabu_len)
 
+        # Periodic smoothing
         if smooth_every > 0 and state.flips > 0 and (state.flips % smooth_every == 0):
             state.smooth(rho)
 
-        improved = state._count_hard_violations() == 0 and state._soft_objective() > state.best_soft_obj
+        # Track improvement and adapt noise
+        improved = state.snapshot_best_if_better()
         if improved:
             last_improve_iter = state.iter_idx
+            last_improve_soft = state.best_soft_obj
             noise = max(noise_min, noise - adapt_delta)
-            state.snapshot_best_if_better()
         elif state.iter_idx - last_improve_iter >= adapt_every:
             noise = min(noise_max, noise + adapt_delta)
-            last_improve_iter = state.iter_idx
+            last_improve_iter = state.iter_idx  # avoid repeated bumps
 
+        # Restart on long stagnation or time pressure
         if restart_after > 0 and state.iter_idx > 0 and (state.iter_idx % restart_after == 0):
             pass#state.restart_partial_from_best(restart_k)
-    print("applied =", applied)
-    print("applied1 =", applied1)
-    print("applied3 =", applied3)
-    print("flag =", flag)
-    print("emptyset  =", emptyset)
+
     elapsed = max(1e-9, time.time() - start_t)
     hv = state._count_hard_violations()
     soft = state._soft_objective()
