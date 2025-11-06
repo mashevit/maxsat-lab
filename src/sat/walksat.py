@@ -535,16 +535,11 @@ def walksat_polish(
     time_limit_s: Optional[float] = 0.05,
     noise: float = 0.10,
     hard_safe: bool = True,
-    smooth_every: int = 0,   # keep 0 for pure polish
+    smooth_every: int = 0,
     rho: float = 0.5,
 ) -> Dict[str, Any]:
     """
-    Lightweight WalkSAT-style *polish* step for memetic EA:
-      - seeds from start_assign
-      - hard-first policy
-      - no restarts
-      - small budget (flips and/or wall-time)
-      - returns refined assignment
+    Lightweight WalkSAT-style polish for memetic EA.
 
     Returns:
       {
@@ -553,35 +548,29 @@ def walksat_polish(
         "total_flips": int,
         "flips_per_sec": float,
         "elapsed_sec": float,
-        "final_assign": List[bool],  # 0-based length = nvars
+        "final_assign": List[bool],  # 0-based, len = nvars
       }
     """
-    # ---- helpers assumed in your file/module ----
-    # _extract_clauses(cnf) -> (n, clauses, pos_occ, neg_occ)
-    # SatState(..., init_assign=start_assign)
-    # Clause properties: .is_hard, .lits, .true_cnt
-    # SatState API used: unsat_hard_ids(), unsat_soft_indices(), bump_clause(), flip_var_effect(v),
-    #                    flip_var_hard_delta(v), hard_safe(v), apply_flip(v), _count_hard_violations(),
-    #                    smooth(rho), snapshot_best_if_better(), best_assign, best_soft_obj,
-    #                    assign, flips, restarts, iter_idx
-    n, clauses, pos_occ, neg_occ = _extract_clauses(cnf)
+    n, clauses, pos_occ, neg_occ = _extract_clauses(cnf)  # must exist in your module
     rng = random.Random(rng_seed)
+
+    # SatState is your dataclass; assign is 1-based internally (index 0 unused)
     state = SatState(
-        nvars=n, clauses=clauses, pos_occ=pos_occ, neg_occ=neg_occ,
-        rng=rng, init_assign=start_assign
+        nvars=n,
+        clauses=clauses,
+        pos_occ=pos_occ,
+        neg_occ=neg_occ,
+        rng=rng,
+        assign=[False] + [bool(b) for b in start_assign],
     )
 
-    # sensible defaults if not provided
     if max_flips is None:
-        # small budget: ~10n, clamped between 2k and 50k
         max_flips = max(2_000, min(50_000, 10 * n))
 
     start_t = time.time()
 
     def time_up() -> bool:
-        if time_limit_s is None:
-            return False
-        return (time.time() - start_t) >= time_limit_s
+        return (time_limit_s is not None) and ((time.time() - start_t) >= time_limit_s)
 
     def pick_unsat_clause_index() -> int:
         hard_unsat = state.unsat_hard_ids()
@@ -592,12 +581,10 @@ def walksat_polish(
             return rng.choice(soft_unsat)
         return -1
 
-    # main polish loop (no restarts)
     last_smooth = 0
     while state.flips < max_flips and not time_up():
         target = pick_unsat_clause_index()
         if target == -1:
-            # fully satisfied (hard & soft); still record best
             state.snapshot_best_if_better()
             break
 
@@ -609,37 +596,23 @@ def walksat_polish(
         explore = (rng.random() < noise)
 
         chosen_v = None
-        chosen_gain = float("-inf")
 
-        # --- selection ---
         if hv_now > 0:
-            # Hard-first: only consider moves that *reduce* hard violations.
+            # Reduce hard violations only
             best_dh = math.inf
             best_gain = float("-inf")
-            # If clause is hard and currently false, prefer literals that immediately satisfy it.
-            prefer_clause_fix = clause.is_hard and (clause.true_cnt == 0)
-
             for v in cand_vars:
-                gain, br = state.flip_var_effect(v)
-                dh = state.flip_var_hard_delta(v)  # negative is good (reduces hard)
+                gain, _br = state.flip_var_effect(v)
+                dh = state.flip_var_hard_delta(v)  # negative => reduces hard
                 if dh >= 0:
                     continue
-
-                if prefer_clause_fix:
-                    # does flipping v make this specific clause true?
-                    # (We can cheaply check via the literal polarity.)
-                    # Note: for safety, we just add a soft bias via gain/priority below.
-                    pass
-
-                # rank by most negative dh, then by gain (soft), then by fewer breaks
                 if (dh < best_dh) or (dh == best_dh and gain > best_gain):
                     best_dh = dh
                     best_gain = gain
                     chosen_v = v
-                    chosen_gain = gain
 
-            # If nothing reduced hard (rare), allow an exploratory pick that *makes the target clause true*
-            if chosen_v is None and explore:
+            # Fallback: if nothing reduces hard and we explore, try to make the target clause true (when hard)
+            if chosen_v is None and explore and clause.is_hard and clause.true_cnt == 0:
                 for lit in clause.lits:
                     v = abs(lit)
                     makes_true = (lit > 0 and not state.assign[v]) or (lit < 0 and state.assign[v])
@@ -647,25 +620,19 @@ def walksat_polish(
                         dh = state.flip_var_hard_delta(v)
                         if (not hard_safe) or (dh < 0):
                             chosen_v = v
-                            chosen_gain, _ = state.flip_var_effect(v)
                             break
-
         else:
-            # Feasible: do not break hard clauses if hard_safe.
-            best_gain = float("-inf")
-            best_break = math.inf
-
+            # Feasible region: don't break hard clauses if hard_safe
             if explore:
-                # pick any hard-safe variable from the clause to keep some noise
-                rng.shuffle(cand_vars)
                 for v in cand_vars:
-                    gain, br = state.flip_var_effect(v)
+                    _gain, br = state.flip_var_effect(v)
                     if hard_safe and br > 0:
                         continue
                     chosen_v = v
-                    chosen_gain = gain
                     break
             else:
+                best_gain = float("-inf")
+                best_break = math.inf
                 for v in cand_vars:
                     gain, br = state.flip_var_effect(v)
                     if hard_safe and br > 0:
@@ -674,29 +641,45 @@ def walksat_polish(
                         best_gain = gain
                         best_break = br
                         chosen_v = v
-                        chosen_gain = gain
 
-        # --- apply or skip ---
         if chosen_v is not None:
             state.apply_flip(chosen_v)
 
-        # optional, usually off for polish
         if smooth_every > 0 and state.flips > 0 and state.flips != last_smooth and (state.flips % smooth_every == 0):
             state.smooth(rho)
             last_smooth = state.flips
 
-        # keep best snapshot (lexicographic inside SatState implementation)
         state.snapshot_best_if_better()
 
-    # finalize
     elapsed = max(1e-9, time.time() - start_t)
     hv = state._count_hard_violations()
     soft = state._soft_objective()
-    if state.best_assign is not None and hv == 0:
+    if state.best_assign is not None and state.best_hard_violations == 0:
         soft = state.best_soft_obj
         hv = 0
 
-    final_assign = (state.best_assign or state.assign)[1:]  # drop 1-based padding
+    # Prefer a final assignment that is at least as feasible as current
+    final_1based = state.assign
+    if state.best_assign is not None:
+        def _count_hard_for(assign_1based):
+            hvb = 0
+            for cl in state.clauses:
+                satisfied = False
+                for lit in cl.lits:
+                    v = abs(lit)
+                    val = assign_1based[v]
+                    if (lit > 0 and val) or (lit < 0 and not val):
+                        satisfied = True
+                        break
+                if not satisfied and cl.is_hard:
+                    hvb += 1
+            return hvb
+        hv_best = _count_hard_for(state.best_assign)
+        hv_cur = hv
+        if hv_best <= hv_cur:
+            final_1based = state.best_assign
+
+    final_assign = [bool(b) for b in final_1based[1:]]
 
     return {
         "best_soft_weight": float(soft),
@@ -704,5 +687,5 @@ def walksat_polish(
         "total_flips": int(state.flips),
         "flips_per_sec": float(state.flips / elapsed),
         "elapsed_sec": float(elapsed),
-        "final_assign": [bool(b) for b in final_assign],
+        "final_assign": final_assign,
     }

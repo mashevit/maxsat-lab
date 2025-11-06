@@ -15,6 +15,12 @@ Batch:
 
 
 
+python -m src.cli.polish --path data/toy/mini.wcnf --print-assign
+# or tweak budgets:
+python -m src.cli.polish --path data/toy/mini.wcnf --seed 42 --time-limit-s 0.02 --max-flips 500 --print-assign
+
+
+
 
 
 

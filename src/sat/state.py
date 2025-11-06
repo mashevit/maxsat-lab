@@ -31,6 +31,7 @@ class SatState:
     flips: int = 0
     restarts: int = 0
     best_soft_obj: float = float("-inf")
+    best_hard_violations: int = 10**9
     best_assign: Optional[List[bool]] = None
     hard_violations: int = 0
     # current assignment
@@ -53,6 +54,7 @@ class SatState:
         # Compute initial objective & hard violations
         self.hard_violations = self._count_hard_violations()
         self.best_soft_obj = self._soft_objective()
+        self.best_hard_violations = self.hard_violations
         self.best_assign = self.assign.copy()
 
     def _lit_val(self, lit: int) -> bool:
@@ -305,10 +307,23 @@ class SatState:
             for lit in self.clauses[ci].lits:
                 adj.add(abs(lit))
         return adj
+    '''
     def snapshot_best_if_better(self) -> bool:
         soft = self._soft_objective()
         hv = self._count_hard_violations()
         if hv == 0 and soft > self.best_soft_obj:
+            self.best_soft_obj = soft
+            self.best_assign = self.assign.copy()
+            return True
+        return False
+    '''
+
+    def snapshot_best_if_better(self) -> bool:
+        hv = self._count_hard_violations()
+        soft = self._soft_objective()
+        better = (hv < self.best_hard_violations) or (hv == self.best_hard_violations and soft > self.best_soft_obj)
+        if better:
+            self.best_hard_violations = hv
             self.best_soft_obj = soft
             self.best_assign = self.assign.copy()
             return True
