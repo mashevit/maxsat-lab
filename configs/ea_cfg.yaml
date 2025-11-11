@@ -1,0 +1,28 @@
+# Global caps for the whole memetic run (used in run_memetic)
+time_limit_s: 10.0   # overall wall-time cap in seconds for EA loop
+
+ea:
+  enabled: true
+  pop_size: 60
+  tournament_k: 4
+  pmutate: 0.02
+  elitism: true
+  max_gens: 100
+  # Note: run_memetic doesn't actually use this copy;
+  # polishing budget comes from ls.ls_polish_flips below.
+  ls_polish_flips: 700
+
+ls:
+  # Budget passed to short_polish (and then to walksat_polish)
+  ls_polish_flips: 700      # flips budget for polishing each child
+  time_limit_s: 0.05        # per-polish time cap (seconds)
+  flip_budget: 2000         # mapped to max_flips internally
+
+  # Extra LS controls your wrapper can use
+  hard_safe: true           # never increase hard violations during LS
+  explore: false            # allow exploratory (non-greedy) moves if your LS supports it
+  noise: 0.25               # random-walk/noise parameter (if used by your LS)
+
+io:
+  out_json: "runs/{stem}.ea.json"  # output file (CLI falls back to this if --out-json not set)
+  quiet: false   

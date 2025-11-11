@@ -21,7 +21,11 @@ python -m src.cli.polish --path data/toy/mini.wcnf --seed 42 --time-limit-s 0.02
 
 
 
+# As a module (recommended so imports resolve):
+python -m src.cli.run_ea path/to/instance.wcnf -c cfg.yaml -D ea.pop_size=80 -D ls.time_limit_s=0.05 --seed 42
 
+# Or directly (uses flexible import and built-in WCNF parser):
+python src/cli/run_ea.py path/to/instance.wcnf --cfg cfg.json --seed 7 --out-json run.json
 
 
 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1 python -m src.cli.solve_batch --folder data/toy --config configs/default.yaml --seed 1 --out experiments/toy_results_tmp.csv
