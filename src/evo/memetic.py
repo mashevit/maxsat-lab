@@ -92,7 +92,17 @@ def run_memetic(wcnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
         if cur_best.fitness > best.fitness:
             best = cur_best.copy()
 
+
+
+    def _assignment_exports(assign01: list[bool]) -> dict:
+        # index 0 is unused in your code; export 1..n
+        bits = "".join("1" if b else "0" for b in assign01[1:])
+        dimacs = "v " + " ".join(str(i if assign01[i] else -i) for i in range(1, len(assign01))) + " 0"
+        true_vars = [i for i in range(1, len(assign01)) if assign01[i]]
+        return {"assign_bits": bits, "dimacs": dimacs, "true_vars": true_vars}
+
     elapsed = max(1e-9, time.time() - start_t)
+    exports = _assignment_exports(best.assign01)
     soft, hv = evaluate_assignment(wcnf, best.assign01)
     return {
         "best_soft_weight": float(soft),
@@ -102,5 +112,5 @@ def run_memetic(wcnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
         "flips_per_sec": 0.0,
         "restarts": 0,
         "final_noise": 0.0,
-        "meta": {"ea_generations": gen, "children": total_children},
+        "meta": {"ea_generations": gen, "children": total_children, **exports,},
     }

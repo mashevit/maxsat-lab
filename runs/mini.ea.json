@@ -1,0 +1,1 @@
+{"best_soft_weight": 5.0, "hard_violations": 0, "elapsed_sec": 0.050307273864746094, "total_flips": 0, "flips_per_sec": 0.0, "restarts": 0, "final_noise": 0.0, "meta": {"ea_generations": 99, "children": 7524, "assign_bits": "111", "dimacs": "v 1 2 3 0", "true_vars": [1, 2, 3]}}
