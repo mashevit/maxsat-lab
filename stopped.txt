@@ -43,4 +43,8 @@ run_ea.py
 def main(argv=None) -> int:
 
 
+    # Run EA
+    t0 = time.time()
+    res = run_memetic(wcnf, cfg, rng_seed=args.seed)
+
 
