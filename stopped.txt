@@ -38,3 +38,9 @@ walksat line 499 else:
             best_gain = float("-inf")
             best_break = math.inf
 
+run_ea.py
+# -------- Main CLI --------
+def main(argv=None) -> int:
+
+
+
