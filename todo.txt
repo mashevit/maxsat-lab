@@ -1,3 +1,8 @@
+in walksat - poslish restart so it will not break hard cluses
+
+
+
+
 ask how to use var chosen_gain
 
 check - 
