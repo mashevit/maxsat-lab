@@ -48,3 +48,17 @@ def main(argv=None) -> int:
     res = run_memetic(wcnf, cfg, rng_seed=args.seed)
 
 
+memetic.py
+def run_memetic(wcnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
+    """
+    Minimal memetic loop:
+      - JW seeding
+      - tournament selection, clause-aware crossover, mutation
+      - (stub) short polish
+      - elitist replacement
+    Fitness evaluates *assignments directly* (soft weight, penalize hard violations).
+    """
+
+
+
+
