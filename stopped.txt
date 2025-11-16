@@ -62,4 +62,8 @@ def run_memetic(wcnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
 line 47     pop = Population(n_vars=wcnf.n_vars, size=pop_size, rng=rng)
 actually ->  line 48     pop.init_seeds(wcnf, cfg)
 
+population.py
+       pri = jw_priors(wcnf) line 99 in     def init_seeds(self, wcnf, cfg: Dict[str, Any]) -> None:
 
+
+       to read : https://chatgpt.com/share/6919e2d2-c664-800e-9dd5-df1612f894dc
