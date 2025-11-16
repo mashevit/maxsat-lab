@@ -59,6 +59,7 @@ def run_memetic(wcnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
     Fitness evaluates *assignments directly* (soft weight, penalize hard violations).
     """
 
-
+line 47     pop = Population(n_vars=wcnf.n_vars, size=pop_size, rng=rng)
+actually ->  line 48     pop.init_seeds(wcnf, cfg)
 
 

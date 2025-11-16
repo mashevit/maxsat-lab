@@ -1,4 +1,4 @@
-in walksat - poslish restart so it will not break hard cluses
+in walksat - poslish restart so it will not break hard clauses
 
 
 
