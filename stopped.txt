@@ -67,3 +67,9 @@ population.py
 
 
        to read : https://chatgpt.com/share/6919e2d2-c664-800e-9dd5-df1612f894dc
+
+
+        for lit in cl.lits:
+            v = abs(lit)
+
+            line 36 population.py
