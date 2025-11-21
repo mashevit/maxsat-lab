@@ -84,3 +84,5 @@ line 50 memetic
 line 110: population.py        else:
             soft, hv = evaluate_assignment(wcnf, ind.assign01)
 
+
+memetic.py  line 55     best = pop.best().copy() line 56
