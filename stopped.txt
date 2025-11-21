@@ -73,3 +73,9 @@ population.py
             v = abs(lit)
 
             line 36 population.py
+
+
+line 50 memetic
+    # initial evaluation
+    for ind in pop.members:
+        pop.evaluate(wcnf, ind)

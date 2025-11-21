@@ -51,7 +51,7 @@ def run_memetic(wcnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
     for ind in pop.members:
         pop.evaluate(wcnf, ind)
 
-    frozen = frozen_hard_unit_vars(wcnf)
+    frozen = frozen_hard_unit_vars(wcnf)#not needed
     best = pop.best().copy()
 
     # stop conditions

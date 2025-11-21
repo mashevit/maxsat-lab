@@ -137,7 +137,7 @@ def mutate(assign01: List[bool], pmutate: float, rng: random.Random, frozen: set
     n = len(assign01) - 1
     for v in range(1, n + 1):
         if v in frozen:
-            continue
+            pass#continue
         if rng.random() < pmutate:
             assign01[v] = (not assign01[v])
 
