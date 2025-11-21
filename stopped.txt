@@ -86,3 +86,7 @@ line 110: population.py        else:
 
 
 memetic.py  line 55     best = pop.best().copy() line 56
+
+memetic.py line   66
+    while (time.time() - start_t) < time_cap and gen < max_gens:
+        gen += 1
