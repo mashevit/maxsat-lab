@@ -79,3 +79,8 @@ line 50 memetic
     # initial evaluation
     for ind in pop.members:
         pop.evaluate(wcnf, ind)
+
+
+line 110: population.py        else:
+            soft, hv = evaluate_assignment(wcnf, ind.assign01)
+
