@@ -100,3 +100,10 @@ memetic.py line 77-78
 
         memetic.py line 81
         child_bits = clause_aware_crossover(p1, p2, wcnf, rng)
+
+
+operators.py  line 42
+def clause_aware_crossover(p1: Individual, p2: Individual, wcnf, rng: random.Random) -> List[bool]:
+    """
+    Per-variable choice guided by soft occurrence scores; then hard repair.
+    """
