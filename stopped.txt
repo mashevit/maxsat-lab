@@ -95,3 +95,8 @@ memetic.py line   66
 memetic.py line 77-78
        # Fill the rest
         while len(new_members) < pop_size:
+
+
+
+        memetic.py line 81
+        child_bits = clause_aware_crossover(p1, p2, wcnf, rng)
