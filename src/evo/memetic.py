@@ -3,7 +3,7 @@ from typing import Dict, Any, List
 import time, math, random
 
 from .population import Population, Individual, evaluate_assignment
-from .operators import tournament, clause_aware_crossover, mutate, frozen_hard_unit_vars, short_polish
+from .operators import tournament, clause_aware_crossover, mutate, frozen_hard_unit_vars, short_polish, clause_aware_crossover1
 
 
 def _ea_cfg(cfg: Dict[str, Any]) -> Dict[str, Any]:
@@ -78,7 +78,7 @@ def run_memetic(wcnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
         while len(new_members) < pop_size:
             p1 = tournament(pop.members, k, rng)
             p2 = tournament(pop.members, k, rng)
-            child_bits = clause_aware_crossover(p1, p2, wcnf, rng)
+            child_bits = clause_aware_crossover1(p1, p2, wcnf, rng)
             mutate(child_bits, pmutate, rng, frozen=frozen)
             child_bits = short_polish(child_bits, wcnf, ls_small, rng_seed=rng.randrange(1<<30))
             child = Individual(assign01=child_bits, meta={"gen": gen})
