@@ -107,3 +107,6 @@ def clause_aware_crossover(p1: Individual, p2: Individual, wcnf, rng: random.Ran
     """
     Per-variable choice guided by soft occurrence scores; then hard repair.
     """
+
+
+def clause_aware_crossover1 line 139 operators.py
