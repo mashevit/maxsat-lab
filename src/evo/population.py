@@ -14,10 +14,20 @@ class Individual:
     assign01: List[bool]
     fitness: float = float("-inf")
     hard_violations: int = 0
+
+    # one bool per hard clause
+    hard_satisfied: List[bool] = field(default_factory=list)
+
     meta: Dict[str, Any] = field(default_factory=dict)
 
     def copy(self) -> "Individual":
-        return Individual(self.assign01.copy(), self.fitness, self.hard_violations, dict(self.meta))
+        return Individual(
+            assign01=self.assign01.copy(),
+            fitness=self.fitness,
+            hard_violations=self.hard_violations,
+            hard_satisfied=self.hard_satisfied.copy(),
+            meta=self.meta.copy(),
+        )
 
 
 def jw_priors(wcnf) -> List[float]:
@@ -77,6 +87,38 @@ def evaluate_assignment(wcnf, assign01: List[bool]) -> Tuple[float, int]:
     return soft_w, hard_viol
 
 
+def clause_satisfied(clause, assign01: List[bool]) -> bool:
+    """
+    A clause is satisfied if at least one literal is true.
+    clause.lits: list of ints, e.g. [1, -3, 4]
+    assign01[v]: bool, 1-based (assign01[0] is dummy)
+    """
+    for lit in clause.lits:
+        v = abs(lit)
+        val = assign01[v]
+        if (lit > 0 and val) or (lit < 0 and not val):
+            return True
+    return False
+
+
+def init_hard_satisfied(hard_clauses, assign01: List[bool]) -> List[bool]:
+    return [clause_satisfied(cl, assign01) for cl in hard_clauses]
+
+
+
+def build_hard_occurs(hard_clauses, n_vars: int) -> List[List[int]]:
+    """
+    occurs[v] = list of indices of hard clauses in which variable v appears.
+    """
+    occurs = [[] for _ in range(n_vars + 1)]
+    for ci, cl in enumerate(hard_clauses):
+        for lit in cl.lits:
+            v = abs(lit)
+            occurs[v].append(ci)
+    return occurs
+
+
+
 class Population:
     """
     Minimal population manager with JW seeding and caching.
@@ -95,12 +137,18 @@ class Population:
             a[v] = (self.rng.random() < pri[v])
         return a
 
+
+
+    
+
     def init_seeds(self, wcnf, cfg: Dict[str, Any]) -> None:
         pri = jw_priors(wcnf)
         cnt = self.size
         for _ in range(cnt):
             a = self._new_assign_from_priors(pri)
             ind = Individual(assign01=a)
+            hard_clauses = [cl for cl in wcnf.clauses if cl.is_hard]
+            ind.hard_satisfied = init_hard_satisfied(hard_clauses, ind.assign01)
             self.members.append(ind)
 
     def evaluate(self, wcnf, ind: Individual) -> Individual:

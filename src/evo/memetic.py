@@ -2,8 +2,8 @@ from __future__ import annotations
 from typing import Dict, Any, List
 import time, math, random
 
-from .population import Population, Individual, evaluate_assignment
-from .operators import tournament, clause_aware_crossover, mutate, frozen_hard_unit_vars, short_polish, clause_aware_crossover1
+from .population import Population, Individual, evaluate_assignment, build_hard_occurs
+from .operators import tournament, clause_aware_crossover, mutate,mutate1, frozen_hard_unit_vars, short_polish, clause_aware_crossover1
 
 
 def _ea_cfg(cfg: Dict[str, Any]) -> Dict[str, Any]:
@@ -62,6 +62,11 @@ def run_memetic(wcnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
     ls_small = _ls_budget(cfg)
     gen = 0
     total_children = 0
+        # 1) derive hard_clauses once
+    hard_clauses = [cl for cl in wcnf.clauses if cl.is_hard]
+
+    # 2) precompute occurrences
+    hard_occurs = build_hard_occurs(hard_clauses, wcnf.n_vars)
 
     while (time.time() - start_t) < time_cap and gen < max_gens:
         gen += 1
@@ -79,7 +84,8 @@ def run_memetic(wcnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
             p1 = tournament(pop.members, k, rng)
             p2 = tournament(pop.members, k, rng)
             child_bits = clause_aware_crossover1(p1, p2, wcnf, rng)
-            mutate(child_bits, pmutate, rng, frozen=frozen)
+            #mutate(child_bits, pmutate, rng, frozen=frozen)
+            mutate1(child_bits, pmutate, rng, hard_clauses, hard_occurs, ind.hard_satisfied)
             child_bits = short_polish(child_bits, wcnf, ls_small, rng_seed=rng.randrange(1<<30))
             child = Individual(assign01=child_bits, meta={"gen": gen})
             pop.evaluate(wcnf, child)

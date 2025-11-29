@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import List
 import random
-from .population import Individual, evaluate_assignment
+from .population import Individual, evaluate_assignment, clause_satisfied
 
 def frozen_hard_unit_vars(wcnf) -> set:
     """Variables that must be fixed by hard unit clauses."""
@@ -305,6 +305,8 @@ def clause_aware_crossover1(
         commit_assignment(v, chosen)
 
     return child
+
+
 def mutate(assign01: List[bool], pmutate: float, rng: random.Random, frozen: set) -> None:
     n = len(assign01) - 1
     for v in range(1, n + 1):
@@ -312,6 +314,60 @@ def mutate(assign01: List[bool], pmutate: float, rng: random.Random, frozen: set
             pass#continue
         if rng.random() < pmutate:
             assign01[v] = (not assign01[v])
+
+
+
+def mutate1(assign01: List[bool],
+           pmutate: float,
+           rng: random.Random,
+           hard_clauses,
+           hard_occurs: List[List[int]],
+           hard_satisfied: List[bool]) -> None:
+    """
+    Bit-flip mutation on variables 1..n with probability pmutate,
+    but only accept flips that DO NOT turn any satisfied hard clause
+    into an unsatisfied one.
+
+    - hard_occurs[v] = list of indices of hard_clauses where v appears.
+    - hard_satisfied[i] = whether hard_clauses[i] is currently satisfied.
+    """
+    n = len(assign01) - 1
+
+    for v in range(1, n + 1):
+        if rng.random() >= pmutate:
+            continue
+
+        old_val = assign01[v]
+        affected = hard_occurs[v]
+
+        # Save previous status of only the affected clauses
+        prev_status = [hard_satisfied[ci] for ci in affected]
+
+        # Tentative flip
+        assign01[v] = not old_val
+
+        # Recompute status for affected clauses
+        new_status = []
+        ok = True
+        for prev, ci in zip(prev_status, affected):
+            sat_now = clause_satisfied(hard_clauses[ci], assign01)
+            new_status.append(sat_now)
+
+            # Do not allow a satisfied hard clause to become unsatisfied
+            if prev and not sat_now:
+                ok = False
+                break
+
+        if not ok:
+            # Revert flip; keep hard_satisfied unchanged
+            assign01[v] = old_val
+            continue
+
+        # Commit: update hard_satisfied for affected clauses we checked
+        for ci, sat_now in zip(affected, new_status):
+            hard_satisfied[ci] = sat_now
+
+
 
 
 def short_polish(assign01: List[bool], wcnf, ls_cfg: dict, rng_seed: int) -> List[bool]:
