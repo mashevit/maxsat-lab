@@ -106,7 +106,36 @@ def run_memetic(wcnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
         dimacs = "v " + " ".join(str(i if assign01[i] else -i) for i in range(1, len(assign01))) + " 0"
         true_vars = [i for i in range(1, len(assign01)) if assign01[i]]
         return {"assign_bits": bits, "dimacs": dimacs, "true_vars": true_vars}
+        #results = {"assign_bits": bits, "dimacs": dimacs, "true_vars": true_vars}
+    def clause_satisfied_bits(clause, bits: List[bool]) -> bool:
+        """
+        clause.lits: list of ints (e.g. [1, -3, 4])
+        bits[v]: True/False, 1-based (bits[0] unused)
+        """
+        for lit in clause.lits:
+            v = abs(lit)
+            val = bits[v]
+            if (lit > 0 and val) or (lit < 0 and not val):
+                return True
+        return False
 
+    def count_satisfied_clauses_bits(wcnf, bits: List[bool]) -> int:
+        return sum(1 for cl in wcnf.clauses if clause_satisfied_bits(cl, bits))
+
+    results = _assignment_exports(best.assign01)
+    # Using your results dict:
+    def bits_to_assign01(bits: str) -> List[bool]:
+        assert all(c in "01" for c in bits)
+        # index 0 unused; bits[0] -> var 1, bits[1] -> var 2, ...
+        return [False] + [c == "1" for c in bits]
+
+    assign01 = bits_to_assign01(results["assign_bits"])
+    #bits = f'0{results["assign_bits"]}'
+    #wcnf = results["dimacs"]
+
+    total_clauses = len(wcnf.clauses)
+    sat_clauses = count_satisfied_clauses_bits(wcnf, assign01)
+    unsat_clauses = total_clauses - sat_clauses
     elapsed = max(1e-9, time.time() - start_t)
     exports = _assignment_exports(best.assign01)
     soft, hv = evaluate_assignment(wcnf, best.assign01)
@@ -119,4 +148,9 @@ def run_memetic(wcnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
         "restarts": 0,
         "final_noise": 0.0,
         "meta": {"ea_generations": gen, "children": total_children, **exports,},
+        "satisfied_clauses": {
+            "total": total_clauses,
+            "satisfied": sat_clauses,
+            "unsatisfied": unsat_clauses,
+        },
     }

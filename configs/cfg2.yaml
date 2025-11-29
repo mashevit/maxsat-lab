@@ -1,0 +1,10 @@
+ea:
+  enabled: true
+  pop_size: 30
+  elitism: True
+ls:
+  ls_polish_flips: 700
+  time_limit_s: 0.05
+io:
+  out_json: "runs/{stem}11.ea.json"   # where to write results
+  quiet: false                      # suppress human summary on stderr if true

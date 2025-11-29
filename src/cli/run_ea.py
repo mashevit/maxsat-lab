@@ -154,18 +154,21 @@ def main(argv=None) -> int:
 
     args = p.parse_args(argv)
 
-    # Load WCNF: use project's loader if available, else built-in
+    # Load WCNF: use sat.cnf parser if available, else built-in fallback
     wcnf = None
     if not args.use_internal_parser:
         try:
-            # If you have your own loader, put it here:
-            # from sat.cnf import load_wcnf
-            # wcnf = load_wcnf(args.wcnf)
-            pass
-        except Exception:
+            from sat.cnf import WCNF as DimacsWCNF
+            # use the full DIMACS/WCNF parser in src/sat/cnf.py
+            wcnf = DimacsWCNF.parse_dimacs(args.wcnf)
+        except Exception as e:
+            print(f"[ea] Warning: failed to use sat.cnf parser: {e}", file=sys.stderr)
             wcnf = None
+
+    # Fallback: simple internal parser in this file
     if wcnf is None:
         wcnf = _parse_wcnf(args.wcnf)
+
 
     # Load config and apply overrides
     cfg: Dict[str, Any] = _load_cfg(args.cfg)

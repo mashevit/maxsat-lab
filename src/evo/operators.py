@@ -1,8 +1,8 @@
 from __future__ import annotations
-from typing import List
+from typing import List, Dict, Any
 import random
 from .population import Individual, evaluate_assignment, clause_satisfied
-
+from sat.walksat import walksat_polish
 def frozen_hard_unit_vars(wcnf) -> set:
     """Variables that must be fixed by hard unit clauses."""
     fr = set()
@@ -370,7 +370,7 @@ def mutate1(assign01: List[bool],
 
 
 
-def short_polish(assign01: List[bool], wcnf, ls_cfg: dict, rng_seed: int) -> List[bool]:
+def short_polish1(assign01: List[bool], wcnf, ls_cfg: dict, rng_seed: int) -> List[bool]:
     """
     Placeholder: if your WalkSAT polishing later accepts a start assignment, wire it here.
     For now we simply return the child unchanged to keep the pipeline deterministic.
@@ -379,3 +379,49 @@ def short_polish(assign01: List[bool], wcnf, ls_cfg: dict, rng_seed: int) -> Lis
     # cfg = dict(ls_cfg); cfg['max_flips'] = cfg.get('ls_polish_flips', 700); ...
     # stats = walksat.run_satlike(wcnf, cfg, rng_seed=rng_seed)
     return assign01
+
+
+
+def short_polish(
+    assign01: List[bool],
+    wcnf,
+    ls_cfg: Dict[str, Any],
+    rng_seed: int,
+) -> List[bool]:
+    """
+    Polish a child using WalkSAT.
+
+    - EA uses 1-based assign01 (index 0 unused).
+    - walksat_polish expects 0-based list (len = n_vars) and returns 0-based.
+    """
+
+    # 1-based -> 0-based for WalkSAT
+    start_0_based = [bool(b) for b in assign01[1:]]
+
+    # Pull parameters from ls_cfg with sensible defaults
+    max_flips = ls_cfg.get("polish_max_flips", ls_cfg.get("max_flips", None))
+    time_limit_s = ls_cfg.get("polish_time_limit_s", ls_cfg.get("time_limit_s", 0.05))
+    noise = ls_cfg.get("noise", 0.10)
+    hard_safe = ls_cfg.get("hard_safe", True)
+    smooth_every = ls_cfg.get("smooth_every", 0)
+    rho = ls_cfg.get("rho", 0.5)
+
+    res = walksat_polish(
+        cnf=wcnf,
+        start_assign=start_0_based,
+        rng_seed=rng_seed,
+        max_flips=max_flips,
+        time_limit_s=time_limit_s,
+        noise=noise,
+        hard_safe=hard_safe,
+        smooth_every=smooth_every,
+        rho=rho,
+    )
+
+    # WalkSAT returns 0-based final_assign
+    final_0_based = res["final_assign"]
+
+    # Back to EA convention: 1-based, index 0 unused
+    polished_1_based = [False] + [bool(b) for b in final_0_based]
+
+    return polished_1_based

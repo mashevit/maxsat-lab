@@ -23,7 +23,7 @@ python -m src.cli.polish --path data/toy/mini.wcnf --seed 42 --time-limit-s 0.02
 
 # As a module (recommended so imports resolve):
 python -m src.cli.run_ea data/toy/mini.wcnf -c configs/cfg.yaml -D ea.pop_size=80 -D ls.time_limit_s=0.05 --seed 42
-
+python -m src.cli.run_ea data/toy/uf20-04.cnf -c configs/cfg2.yaml -D ea.pop_size=80 -D ls.time_limit_s=0.05 --seed 42
 # Or directly (uses flexible import and built-in WCNF parser):
 python src/cli/run_ea.py data/toy/mini.wcnf --cfg cfg.json --seed 7 --out-json run.json
 

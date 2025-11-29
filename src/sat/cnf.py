@@ -35,7 +35,7 @@ class WCNF:
         with open(path, "r", encoding="utf-8") as f:
             for raw in f:
                 line = raw.strip()
-                if not line or line.startswith("c"):
+                if not line or line.startswith("c") or line.startswith("%") or line.startswith("0"):
                     continue
                 if line.startswith("p"):
                     # Examples:
@@ -71,9 +71,9 @@ class WCNF:
                     # CNF: weight = top (hard)
                     if top is None:
                         top = 10**9  # effectively infinite
-                    weight = top
+                    weight = 1#top
                     lits = [int(x) for x in parts if x != "0"]
-                    is_hard = True
+                    is_hard = False#True
 
                 if len(lits) == 0:
                     # Empty clause
