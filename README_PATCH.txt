@@ -41,3 +41,27 @@ Knobs you may want:
     noise: 0.2
     noise_min/noise_max: 0.05/0.45
     hard_repair_budget: 12000
+
+
+
+python -m src.cli.run_experiment \
+    --bench_dir data/toy \
+    -c configs/cfg2.yaml \
+    --seeds 1 2 3 4 5 \
+    --time_limit 30 \
+    --out_csv results/dev_small_base.csv \
+    --config_id cfg2_pop80
+
+
+python -m src.cli.run_experiment \
+    --bench_dir data/toy \
+    -c configs/cfg2.yaml \
+    --seeds 1 2 3 4 5 \
+    --time_limit 30 \
+    --out_csv results/dev_small_cfg2_pop80.csv \
+    --config_id cfg2_pop80 \
+    -D ea.pop_size=80 \
+    -D ls.time_limit_s=0.05
+
+
+If your solver actually expects the per-run time limit under e.g. ea.time_limit_s or ls.time_limit_s, just tweak the _deep_set(cfg, "time_limit_s", ...) line to the dotted key you’re using.
