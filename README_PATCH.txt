@@ -83,3 +83,12 @@ python -m src.cli.run_experiment1 \
 אם ה־time limit שלך צריך ללכת למפתח אחר (למשל time_limit_s או ls.time_limit_s), פשוט תשנה בראש הקובץ:
 
 TIME_LIMIT_KEY = "ea.time_limit_s"
+
+python -m src.cli.run_experiment \
+  --bench_dir bench/dev_small \
+  -c configs/cfg2.yaml \
+  --seeds 1 2 3 4 5 \
+  --total_time_s 300 \
+  --out_csv results/dev_small_cfg2_5min.csv \
+  --config_id cfg2_5min \
+  -D ea.pop_size=80
