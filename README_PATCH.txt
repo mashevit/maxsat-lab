@@ -92,3 +92,7 @@ python -m src.cli.run_experiment \
   --out_csv results/dev_small_cfg2_5min.csv \
   --config_id cfg2_5min \
   -D ea.pop_size=80
+
+
+
+  python -m src.cli.batch_opt_rc2 data/unsat_exp -o results/dev_small_rc2.csv

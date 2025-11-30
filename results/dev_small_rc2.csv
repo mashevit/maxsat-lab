@@ -1,0 +1,4 @@
+instance,status,time_s,n_vars,n_hard,n_soft,soft_total_weight,opt_cost,best_soft_weight
+/home/mashe/maxsat-lab/data/unsat_exp/uuf250-01.cnf,ERROR: load failed (OPT),33.135676,250,0,1065,1065,1,1064
+/home/mashe/maxsat-lab/data/unsat_exp/uuf50-01.cnf,ERROR: load failed (OPT),0.004748,50,0,218,218,1,217
+/home/mashe/maxsat-lab/data/unsat_exp/uuf50-02.cnf,ERROR: load failed (OPT),0.001981,50,0,218,218,1,217
