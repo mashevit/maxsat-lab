@@ -580,9 +580,10 @@ def walksat_polish(
         if soft_unsat:
             return rng.choice(soft_unsat)
         return -1
-
+    num_flips = 0
     last_smooth = 0
     while state.flips < max_flips and not time_up():
+        num_flips += 1
         target = pick_unsat_clause_index()
         if target == -1:
             state.snapshot_best_if_better()
@@ -682,6 +683,7 @@ def walksat_polish(
     final_assign = [bool(b) for b in final_1based[1:]]
 
     return {
+        "flips": int(num_flips),
         "best_soft_weight": float(soft),
         "hard_violations": int(hv),
         "total_flips": int(state.flips),

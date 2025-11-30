@@ -26,7 +26,7 @@ class Individual:
             fitness=self.fitness,
             hard_violations=self.hard_violations,
             hard_satisfied=self.hard_satisfied.copy(),
-            meta=self.meta.copy(),
+            meta=self.meta,
         )
 
 

@@ -39,6 +39,7 @@ def run_memetic(wcnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
     """
     ea = _ea_cfg(cfg)
     pop_size = ea["pop_size"]
+    #pop_size = wcnf.n_vars * 2
     k = ea["tournament_k"]
     pmutate = ea["pmutate"]
     elitism = ea["elitism"]
@@ -51,7 +52,7 @@ def run_memetic(wcnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
     for ind in pop.members:
         pop.evaluate(wcnf, ind)
 
-    frozen = frozen_hard_unit_vars(wcnf)#not needed
+    #frozen = frozen_hard_unit_vars(wcnf)#not needed
     best = pop.best().copy()
 
     # stop conditions
@@ -67,7 +68,7 @@ def run_memetic(wcnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
 
     # 2) precompute occurrences
     hard_occurs = build_hard_occurs(hard_clauses, wcnf.n_vars)
-
+    flips_t =0
     while (time.time() - start_t) < time_cap and gen < max_gens:
         gen += 1
         # Elites
@@ -78,7 +79,7 @@ def run_memetic(wcnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
             elites = []
 
         new_members: List[Individual] = elites.copy()
-
+        
         # Fill the rest
         while len(new_members) < pop_size:
             p1 = tournament(pop.members, k, rng)
@@ -86,7 +87,8 @@ def run_memetic(wcnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
             child_bits = clause_aware_crossover1(p1, p2, wcnf, rng)
             #mutate(child_bits, pmutate, rng, frozen=frozen)
             mutate1(child_bits, pmutate, rng, hard_clauses, hard_occurs, ind.hard_satisfied)
-            child_bits = short_polish(child_bits, wcnf, ls_small, rng_seed=rng.randrange(1<<30))
+            child_bits, flips_t1 = short_polish(child_bits, wcnf, ls_small, rng_seed=rng.randrange(1<<30))
+            flips_t += flips_t1
             child = Individual(assign01=child_bits, meta={"gen": gen})
             pop.evaluate(wcnf, child)
             new_members.append(child)
@@ -143,7 +145,7 @@ def run_memetic(wcnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
         "best_soft_weight": float(soft),
         "hard_violations": int(hv),
         "elapsed_sec": float(elapsed),
-        "total_flips": 0,          # we didn't call LS yet; wire later if you add polish with flips
+        "total_flips": int(flips_t),          # we didn't call LS yet; wire later if you add polish with flips
         "flips_per_sec": 0.0,
         "restarts": 0,
         "final_noise": 0.0,

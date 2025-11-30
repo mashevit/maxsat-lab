@@ -399,8 +399,8 @@ def short_polish(
     start_0_based = [bool(b) for b in assign01[1:]]
 
     # Pull parameters from ls_cfg with sensible defaults
-    max_flips = ls_cfg.get("polish_max_flips", ls_cfg.get("max_flips", None))
-    time_limit_s = ls_cfg.get("polish_time_limit_s", ls_cfg.get("time_limit_s", 0.05))
+    max_flips = ls_cfg.get("ls_polish_flips", ls_cfg.get("max_flips", None))
+    time_limit_s = ls_cfg.get("time_limit_s", ls_cfg.get("time_limit_s", 0.05))
     noise = ls_cfg.get("noise", 0.10)
     hard_safe = ls_cfg.get("hard_safe", True)
     smooth_every = ls_cfg.get("smooth_every", 0)
@@ -424,4 +424,4 @@ def short_polish(
     # Back to EA convention: 1-based, index 0 unused
     polished_1_based = [False] + [bool(b) for b in final_0_based]
 
-    return polished_1_based
+    return polished_1_based, res["flips"]
