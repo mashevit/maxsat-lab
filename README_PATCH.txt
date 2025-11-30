@@ -65,3 +65,21 @@ python -m src.cli.run_experiment \
 
 
 If your solver actually expects the per-run time limit under e.g. ea.time_limit_s or ls.time_limit_s, just tweak the _deep_set(cfg, "time_limit_s", ...) line to the dotted key you’re using.
+
+
+
+python -m src.cli.run_experiment1 \
+  --bench_dir data/dev_small \
+  -c configs/cfg2.yaml \
+  --seeds 1 2 3 4 5 \
+  --total_time_s 300 \
+  --out_csv results/dev_small_cfg2_5min.csv \
+  --config_id cfg2_5min \
+  -D ea.pop_size=80
+
+
+  אם אתה רוצה במקום זה זמן קבוע פר ריצה (למשל 30 שניות לכל (instance, seed)), תשתמש ב־--per_run_time_s 30 ותשאיר את --total_time_s ריק.
+
+אם ה־time limit שלך צריך ללכת למפתח אחר (למשל time_limit_s או ls.time_limit_s), פשוט תשנה בראש הקובץ:
+
+TIME_LIMIT_KEY = "ea.time_limit_s"
