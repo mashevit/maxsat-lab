@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 
 # Where to write the per-run time limit in the config dict.
 # CHANGE THIS if your solver expects a different dotted key.
-TIME_LIMIT_KEY = "ea.time_limit_s"
+TIME_LIMIT_KEY = "time_limit_s"#"ea.time_limit_s"
 
 
 # --- Flexible imports so you can run as a module or a script ---

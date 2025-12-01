@@ -681,7 +681,7 @@ def walksat_polish(
             final_1based = state.best_assign
 
     final_assign = [bool(b) for b in final_1based[1:]]
-
+    #print(f'here{num_flips}{max_flips}{time_limit_s}')
     return {
         "flips": int(num_flips),
         "best_soft_weight": float(soft),

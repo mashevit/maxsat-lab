@@ -14,3 +14,5 @@ check -
 
     def restart_partial_from_best(self, k: int) -> None:
         """Restart from best assignment (if any), then flip k random vars."""
+
+pop_size ≈ 2–3 × n_vars

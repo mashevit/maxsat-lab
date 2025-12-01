@@ -1,0 +1,7 @@
+instance,seed,n_vars,n_clauses,hard_violations,soft_unsat,best_weight,runtime_s,flips,ls_calls,status,config_id
+uf50-06.cnf,1,50,218,0,0.0,218.0,1.0217924118041992,40374,0,OK,configs/cfg2.yaml
+uf50-06.cnf,2,50,218,0,0.0,218.0,0.5317230224609375,82530,0,OK,configs/cfg2.yaml
+uf50-06.cnf,3,50,218,0,0.0,218.0,1.0065059661865234,40248,0,OK,configs/cfg2.yaml
+uuf50-01.cnf,1,50,218,0,1.0,217.0,1.0775246620178223,43247,0,OK,configs/cfg2.yaml
+uuf50-01.cnf,2,50,218,0,1.0,217.0,1.079770565032959,43163,0,OK,configs/cfg2.yaml
+uuf50-01.cnf,3,50,218,0,1.0,217.0,1.075740098953247,43503,0,OK,configs/cfg2.yaml

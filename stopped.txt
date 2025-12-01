@@ -110,3 +110,9 @@ def clause_aware_crossover(p1: Individual, p2: Individual, wcnf, rng: random.Ran
 
 
 def clause_aware_crossover1 line 139 operators.py
+
+
+to read src.cli.run_experiment1.py
+line 163 # -------- Instance discovery -------- run_experiment1
+
+line 189 # -------- Core experiment logic -------- run_experiment1

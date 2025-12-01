@@ -141,6 +141,7 @@ def run_memetic(wcnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
     elapsed = max(1e-9, time.time() - start_t)
     exports = _assignment_exports(best.assign01)
     soft, hv = evaluate_assignment(wcnf, best.assign01)
+    #print(flips_t)
     return {
         "best_soft_weight": float(soft),
         "hard_violations": int(hv),

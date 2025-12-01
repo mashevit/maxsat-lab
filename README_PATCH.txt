@@ -85,14 +85,19 @@ python -m src.cli.run_experiment1 \
 TIME_LIMIT_KEY = "ea.time_limit_s"
 
 python -m src.cli.run_experiment \
-  --bench_dir bench/dev_small \
+  --bench_dir data/exp0 \
   -c configs/cfg2.yaml \
-  --seeds 1 2 3 4 5 \
+  --seeds 1 2 3 \
   --total_time_s 300 \
   --out_csv results/dev_small_cfg2_5min.csv \
   --config_id cfg2_5min \
   -D ea.pop_size=80
 
-
+python -m src.cli.run_experiment1 \
+  --bench_dir data/exp0 \
+  -c configs/cfg2.yaml \
+  --seeds 1 2 3 \
+  --out_csv results/dev_small_cfg2_5min.csv \
+  --config_id configs/cfg2.yaml \
 
   python -m src.cli.batch_opt_rc2 data/unsat_exp -o results/dev_small_rc2.csv
