@@ -1,0 +1,2 @@
+instance,seed,n_vars,n_clauses,hard_violations,soft_unsat,best_weight,runtime_s,flips,ls_calls,status,config_id
+uuf250-02.cnf,1,250,1065,0,3.0,1062.0,180.95349526405334,1598000,0,OK,configs/cfg250.yaml

@@ -101,11 +101,18 @@ python -m src.cli.run_experiment1 \
   --config_id configs/cfg2.yaml \
 
 
-  python -m src.cli.run_experiment1   --bench_dir data/exp0   -c configs/cfg2.yaml   --seeds 1 2 3   --out_csv results/dev_small_cfg2_5min.csv   --config_id configs/cfg2.yaml 
+  python -m src.cli.run_experiment1   --bench_dir data/exp2   -c configs/cfg250.yaml   --seeds 1   --out_csv results/dev_250h.csv   --config_id configs/cfg250.yaml 
 
-  python -m src.cli.batch_opt_rc2 data/exp0 -o results/dev_small_rc2_1.csv
+  python -m src.cli.batch_opt_rc2 data/exp2 -o results/dev_250h.csv
 
-
+python -m src.cli.run_experiment \
+  --bench_dir data/exp2 \
+  -c configs/cfg250.yaml \
+  --seeds 1 \
+  --total_time_s 300 \
+  --out_csv results/dev_250h.csv \
+  --config_id cfg2_5min \
+  -D ea.pop_size=50
 
   python -m src.cli.run_pipeline_opt_vs_memetic \
   --bench_dir data/exp0 \
@@ -118,10 +125,10 @@ python -m src.cli.run_experiment1 \
 
 
    python -m src.cli.run_pipeline_opt_vs_memetic \
-  --bench_dir data/exp0 \
-  --config configs/cfg3.yaml \
+  --bench_dir data/exp1 \
+  --config configs/cfg250.yaml \
   --seeds 1 2 \
-  --rc2_csv results/dev_small_rc2_2.csv \
-  --memetic_csv results/dev_small_cfg3.csv \
-  --out_csv results/dev_small_cfg2_5min_with_opt.csv \
-  --config_id cfg3
+  --rc2_csv results/dev_250.csv \
+  --memetic_csv results/dev_250_cfg250.csv \
+  --out_csv results/dev_250_with_opt.csv \
+  --config_id cfg250
