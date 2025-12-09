@@ -150,7 +150,7 @@ def solve_instance(path: str, solver_name: str = "g3") -> RC2Result:
         status = f"ERROR: bad WCNF ({e})"
     except Exception as e:
         status = f"ERROR: RC2 failed ({e})"
-
+    print ("status = ",status)
     time_s = time.time() - start
     return RC2Result(
             instance=path,

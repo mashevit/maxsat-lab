@@ -1,0 +1,5 @@
+instance,seed,n_vars,n_clauses,hard_violations,soft_unsat,best_weight,runtime_s,flips,ls_calls,status,config_id
+uf50-06.cnf,1,50,218,0,2.0,216.0,0.05254960060119629,520,0,OK,cfg3
+uf50-06.cnf,2,50,218,0,1.0,217.0,0.08947229385375977,1040,0,OK,cfg3
+uuf50-01.cnf,1,50,218,0,4.0,214.0,0.08853530883789062,1040,0,OK,cfg3
+uuf50-01.cnf,2,50,218,0,3.0,215.0,0.08589696884155273,1040,0,OK,cfg3

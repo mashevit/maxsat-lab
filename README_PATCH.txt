@@ -100,4 +100,28 @@ python -m src.cli.run_experiment1 \
   --out_csv results/dev_small_cfg2_5min.csv \
   --config_id configs/cfg2.yaml \
 
-  python -m src.cli.batch_opt_rc2 data/unsat_exp -o results/dev_small_rc2.csv
+
+  python -m src.cli.run_experiment1   --bench_dir data/exp0   -c configs/cfg2.yaml   --seeds 1 2 3   --out_csv results/dev_small_cfg2_5min.csv   --config_id configs/cfg2.yaml 
+
+  python -m src.cli.batch_opt_rc2 data/exp0 -o results/dev_small_rc2_1.csv
+
+
+
+  python -m src.cli.run_pipeline_opt_vs_memetic \
+  --bench_dir data/exp0 \
+  --config configs/cfg2.yaml \
+  --seeds 1 2 3 \
+  --rc2_csv results/dev_small_rc2_1.csv \
+  --memetic_csv results/dev_small_cfg2_5min.csv \
+  --out_csv results/dev_small_cfg2_5min_with_opt.csv \
+  --config_id cfg2
+
+
+   python -m src.cli.run_pipeline_opt_vs_memetic \
+  --bench_dir data/exp0 \
+  --config configs/cfg3.yaml \
+  --seeds 1 2 \
+  --rc2_csv results/dev_small_rc2_2.csv \
+  --memetic_csv results/dev_small_cfg3.csv \
+  --out_csv results/dev_small_cfg2_5min_with_opt.csv \
+  --config_id cfg3

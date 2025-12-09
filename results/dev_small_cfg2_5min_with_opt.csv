@@ -1,0 +1,5 @@
+instance,seed,config_id,rc2_status,rc2_opt_cost,soft_total_weight,rc2_best_soft_weight,memetic_status,memetic_best_weight,memetic_soft_unsat,memetic_cost,opt_gap,rel_gap,is_optimal
+uf50-06.cnf,1,cfg3,OPT,0.0,218.0,218.0,OK,216.0,2.0,2.0,2.0,0.0,0
+uf50-06.cnf,2,cfg3,OPT,0.0,218.0,218.0,OK,217.0,1.0,1.0,1.0,0.0,0
+uuf50-01.cnf,1,cfg3,OPT,1.0,218.0,217.0,OK,214.0,4.0,4.0,3.0,3.0,0
+uuf50-01.cnf,2,cfg3,OPT,1.0,218.0,217.0,OK,215.0,3.0,3.0,2.0,2.0,0
