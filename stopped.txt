@@ -116,3 +116,14 @@ to read src.cli.run_experiment1.py
 line 163 # -------- Instance discovery -------- run_experiment1
 
 line 189 # -------- Core experiment logic -------- run_experiment1
+
+
+
+
+# ==========================================
+# 2. CORE: Fitness & Analysis Functions
+# ==========================================
+line 141 from gemini
+
+
+
