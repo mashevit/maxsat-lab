@@ -125,5 +125,20 @@ line 189 # -------- Core experiment logic -------- run_experiment1
 # ==========================================
 line 141 from gemini
 
+def run_evolution():
+    # Settings
+    N_VARS = 50
+    N_CLAUSES = 200
+    POP_SIZE = 10
+    GENERATIONS = 15
+    
+    # Init Problem
+    formula, n_vars = generate_random_maxsat(N_VARS, N_CLAUSES)
+    print(f"--- Problem Generated: {N_VARS} vars, {N_CLAUSES} clauses ---")
+
+    # Init Population (Random assignments)
+
+line 242   from_gemini
+
 
 
