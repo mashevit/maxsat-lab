@@ -4,7 +4,9 @@ import time, math, random
 
 from .population import Population, Individual, evaluate_assignment, build_hard_occurs
 from .operators import tournament, clause_aware_crossover, mutate,mutate1, frozen_hard_unit_vars, short_polish, clause_aware_crossover1
-
+from llm.advisor import LLMAdvisor, apply_advice
+from llm.providers.noop import NoopProvider
+# or: from llm.providers.ollama import OllamaProvider
 
 def _ea_cfg(cfg: Dict[str, Any]) -> Dict[str, Any]:
     ea = cfg.get("ea", {})
@@ -37,6 +39,8 @@ def run_memetic(wcnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
       - elitist replacement
     Fitness evaluates *assignments directly* (soft weight, penalize hard violations).
     """
+
+    advisor = LLMAdvisor(provider=NoopProvider())  # swap provider later
     ea = _ea_cfg(cfg)
     pop_size = ea["pop_size"]
     #pop_size = wcnf.n_vars * 2
@@ -87,6 +91,25 @@ def run_memetic(wcnf, cfg: Dict[str, Any], rng_seed: int = 1) -> Dict[str, Any]:
             child_bits = clause_aware_crossover1(p1, p2, wcnf, rng)
             #mutate(child_bits, pmutate, rng, frozen=frozen)
             mutate1(child_bits, pmutate, rng, hard_clauses, hard_occurs, ind.hard_satisfied)
+            # get violated hard clause indices for the *child* (cheap way: evaluate once)
+            ''''''''
+            tmp_child = Individual(assign01=child_bits)
+            pop.evaluate(wcnf, tmp_child)
+
+            violated_idxs = []
+            # if you stored one bool per hard clause in order, collect violated:
+            # violated_idxs = [i for i, sat in enumerate(tmp_child.hard_satisfied) if not sat]
+            # If you don't have hard_satisfied yet, skip LLM or compute violated list separately.
+
+            advice = advisor.propose(
+                wcnf=wcnf,
+                child_assign01=child_bits,
+                violated_hard_clause_idxs=violated_idxs,
+                rng_seed=rng.randrange(1 << 30),
+                extra={"gen": gen, "child_hv": tmp_child.hard_violations},
+            )
+            child_bits = apply_advice(child_bits, advice)
+            ''''''''
             child_bits, flips_t1 = short_polish(child_bits, wcnf, ls_small, rng_seed=rng.randrange(1<<30))
             flips_t += flips_t1
             child = Individual(assign01=child_bits, meta={"gen": gen})
